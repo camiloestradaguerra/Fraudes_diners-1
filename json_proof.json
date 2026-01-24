@@ -1,0 +1,20 @@
+{
+  "FECHA_DELTA": "2024-05-18",
+  "MesID": 202405,
+  "DiaID": 20240518,
+  "Id_Persona": 5982,
+  "CEDULA": "1711222XXX",
+  "Cd_Autorizacion": "000854",
+  "Id_Tarjeta": "549114XXXXXX9691",
+  "DESC_CADENA": "SUPERMAXI",
+  "ID_ESTABLECIMIENTO": "101",
+  "CODIGO_ESTABLECIMIENTO": "12345",
+  "ESPECIALIDAD": "SUPERMERCADOS",
+  "HORA_INICIO": "10:30:00",
+  "HORA_FIN": "10:35:00",
+  "LOCALIZACION_EXTERNA": "QUITO",
+  "MONTO": 45.75,
+  "Neteo_Mensual": 1250.0,
+  "Neteo_Diario": 45.75,
+  "EDAD_CLIENTE": 42
+}
