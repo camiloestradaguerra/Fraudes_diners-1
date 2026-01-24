@@ -1,43 +1,47 @@
 """Pydantic schemas for API request/response validation."""
 
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class RecommendationRequest(BaseModel):
-    """Request schema for restaurant recommendations."""
+class FraudPredictionRequest(BaseModel):
+    """Request schema for fraud prediction."""
     
-    id_persona: float = Field(..., description="User ID")
-    ciudad: str = Field(..., description="City where user is located")
-    hora: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
-    k: int = Field(5, ge=1, le=20, description="Number of recommendations")
+    transaction_id: str = Field(..., description="Transaction ID")
+    monto: float = Field(..., gt=0, description="Transaction amount")
+    edad: int = Field(..., ge=18, le=120, description="Customer age")
+    ciudad: str = Field(..., description="City where transaction occurred")
+    establecimiento: str = Field(..., description="Merchant/Establishment")
+    especialidad: str = Field(default="GENERAL", description="Specialty type")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "id_persona": 21096.0,
+                "transaction_id": "TRX123456",
+                "monto": 150.50,
+                "edad": 35,
                 "ciudad": "Quito",
-                "hora": 14,
-                "k": 5
+                "establecimiento": "RestaurantXYZ",
+                "especialidad": "RESTAURANTES"
             }
         }
 
 
-class RecommendationItem(BaseModel):
-    """Single recommendation item."""
+class ModelMeta(BaseModel):
+    """Model metadata."""
     
-    establecimiento: str
-    probability: float
-    ciudad: str
+    name: str = Field(..., description="Model name")
+    version: str = Field(..., description="Model version")
+    provider: str = Field(..., description="Model provider")
 
 
-class RecommendationResponse(BaseModel):
-    """Response schema for recommendations."""
-
-    recommendations: List[RecommendationItem]
-    filtered_by_location: bool
-    filtered_by_time: bool
-    used_real_user_data: bool = Field(..., description="True if real user data was used, False if cold start with averages")
+class FraudPredictionResponse(BaseModel):
+    """Response schema for fraud prediction."""
+    
+    schema_version: str = Field(..., description="API schema version")
+    request_id: str = Field(..., description="Request identifier")
+    ml_score_0_999: float = Field(..., ge=0, le=999, description="Fraud risk score (0-999)")
+    model_meta: ModelMeta = Field(..., description="Model metadata")
+    latency_ms: float = Field(..., ge=0, description="Inference latency in milliseconds")
 
 
 class HealthResponse(BaseModel):

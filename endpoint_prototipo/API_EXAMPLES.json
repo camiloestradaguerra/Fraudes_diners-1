@@ -1,0 +1,175 @@
+{
+  "_comment": "Fraud Detection API - Example Requests and Responses",
+  
+  "endpoint_base_url": "http://localhost:8000",
+  
+  "endpoints": {
+    "health_check": {
+      "method": "GET",
+      "path": "/health/",
+      "description": "Check API health status",
+      "response_example": {
+        "status": "healthy",
+        "model_loaded": true,
+        "version": "1.0.0"
+      }
+    },
+    
+    "fraud_predict_single": {
+      "method": "POST",
+      "path": "/fraud/predict",
+      "description": "Predict fraud risk for a single transaction",
+      
+      "request_example": {
+        "transaction_id": "TRX123456",
+        "monto": 150.50,
+        "edad": 35,
+        "ciudad": "Quito",
+        "establecimiento": "RestaurantXYZ",
+        "especialidad": "RESTAURANTES"
+      },
+      
+      "response_example": {
+        "schema_version": "1.0",
+        "request_id": "REQ-A1B2C",
+        "ml_score_0_999": 301.0,
+        "model_meta": {
+          "name": "fraud_model_prod",
+          "version": "2024.11",
+          "provider": "ExternalVendor"
+        },
+        "latency_ms": 12.5
+      }
+    },
+    
+    "fraud_predict_batch": {
+      "method": "POST",
+      "path": "/fraud/batch-predict",
+      "description": "Predict fraud risk for multiple transactions",
+      
+      "request_example": [
+        {
+          "transaction_id": "TRX123456",
+          "monto": 150.50,
+          "edad": 35,
+          "ciudad": "Quito",
+          "establecimiento": "RestaurantXYZ",
+          "especialidad": "RESTAURANTES"
+        },
+        {
+          "transaction_id": "TRX123457",
+          "monto": 5000.00,
+          "edad": 72,
+          "ciudad": "Guayaquil",
+          "establecimiento": "JoyeriaXYZ",
+          "especialidad": "JOYERIAS"
+        }
+      ]
+    }
+  },
+  
+  "response_structure": {
+    "schema_version": "string - API schema version (e.g., '1.0')",
+    "request_id": "string - Unique request identifier (e.g., 'REQ-A1B2C')",
+    "ml_score_0_999": "float - Fraud risk score (0-999, higher = more risky)",
+    "model_meta": {
+      "name": "string - Model name",
+      "version": "string - Model version (e.g., '2024.11')",
+      "provider": "string - Model provider (e.g., 'ExternalVendor')"
+    },
+    "latency_ms": "float - Inference time in milliseconds"
+  },
+  
+  "fraud_score_interpretation": {
+    "0-100": "Very low risk - Likely legitimate",
+    "101-300": "Low risk - Suspicious but probably legitimate",
+    "301-600": "Moderate risk - Requires review",
+    "601-800": "High risk - Probably fraudulent",
+    "801-999": "Very high risk - Highly likely fraudulent"
+  },
+  
+  "request_fields": {
+    "transaction_id": {
+      "type": "string",
+      "required": true,
+      "description": "Unique transaction identifier"
+    },
+    "monto": {
+      "type": "float",
+      "required": true,
+      "constraints": "> 0",
+      "description": "Transaction amount"
+    },
+    "edad": {
+      "type": "integer",
+      "required": true,
+      "constraints": "18-120",
+      "description": "Customer age"
+    },
+    "ciudad": {
+      "type": "string",
+      "required": true,
+      "description": "City where transaction occurred"
+    },
+    "establecimiento": {
+      "type": "string",
+      "required": true,
+      "description": "Merchant or establishment name"
+    },
+    "especialidad": {
+      "type": "string",
+      "required": false,
+      "default": "GENERAL",
+      "description": "Type/specialty of establishment (e.g., 'RESTAURANTES', 'JOYERIAS', 'ELECTRONICA')"
+    }
+  },
+  
+  "example_scenarios": {
+    "low_risk_small_transaction": {
+      "description": "Regular small transaction at known restaurant",
+      "request": {
+        "transaction_id": "TRX001",
+        "monto": 25.50,
+        "edad": 35,
+        "ciudad": "Quito",
+        "establecimiento": "RestauranteFamoso",
+        "especialidad": "RESTAURANTES"
+      },
+      "expected_score_range": "0-100"
+    },
+    
+    "high_risk_large_transaction": {
+      "description": "Large transaction by elderly customer at unknown store",
+      "request": {
+        "transaction_id": "TRX002",
+        "monto": 8500.00,
+        "edad": 78,
+        "ciudad": "Guayaquil",
+        "establecimiento": "TiendaDesconocida",
+        "especialidad": "ELECTRONICA"
+      },
+      "expected_score_range": "600-999"
+    },
+    
+    "medium_risk_unusual_transaction": {
+      "description": "Medium amount at unusual establishment for age group",
+      "request": {
+        "transaction_id": "TRX003",
+        "monto": 450.00,
+        "edad": 19,
+        "ciudad": "Cuenca",
+        "establecimiento": "CasinoXYZ",
+        "especialidad": "ENTRETENIMIENTO"
+      },
+      "expected_score_range": "300-600"
+    }
+  },
+  
+  "http_status_codes": {
+    "200": "Successful prediction",
+    "400": "Bad request - Invalid input data",
+    "422": "Unprocessable entity - Validation error",
+    "500": "Internal server error",
+    "503": "Service unavailable - Model not loaded"
+  }
+}

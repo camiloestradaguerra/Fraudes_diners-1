@@ -1,19 +1,20 @@
 """
-FastAPI Application for Establecimientos Recommendations
+FastAPI Application for Fraud Detection
 
 This API provides endpoints for:
 - Health checks
-- Personalized Establecimientos recommendations with location/time filtering
+- Real-time fraud prediction on transactions
 
 The API implements best practices:
 - CORS middleware for cross-origin requests
-- Structured logging
+- Structured logging and request tracking
 - Pydantic validation
 - Router-based organization
 - Proper error handling
+- Inference latency tracking
 
-Author: Equipo ADX
-Date: 2025-11-13
+Author: Data Science Team
+Date: 2025-01-23
 
 AWS SageMaker Deployment:
 To deploy on SageMaker Endpoint, create a custom inference handler:
@@ -21,30 +22,30 @@ To deploy on SageMaker Endpoint, create a custom inference handler:
 from sagemaker_inference import content_types, decoder, default_inference_handler, encoder
 class ModelHandler(default_inference_handler.DefaultInferenceHandler):
     def default_model_fn(self, model_dir):
-        # Load model from model_dir
+        # Load fraud detection model from model_dir
         pass
     
     def default_input_fn(self, input_data, content_type):
-        # Parse input
+        # Parse transaction data
         pass
     
     def default_predict_fn(self, data, model):
-        # Run inference
+        # Run fraud prediction inference
         pass
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from entrypoint.routers import health, recommendations
+from endpoint_prototipo.routers import health, fraud_prediction
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="RecSys V3 - Establecimientos Recommendation API",
-    description="Personalized Establecimientos recommendations with location and time filtering",
-    version="1.0.0",
+    title="Fraud Detection API",
+    description="Real-time fraud detection model for transaction prediction",
+    version="2024.11",
     contact={
-        "name": "Equipo ADX",
+        "name": "Data Science Team",
         "email": "contact@example.com"
     }
 )
@@ -60,15 +61,15 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router)
-app.include_router(recommendations.router)
+app.include_router(fraud_prediction.router)
 
 
 @app.get("/")
 async def root():
     """Root endpoint."""
     return {
-        "message": "RecSys V3 API",
-        "version": "1.0.0",
+        "message": "Fraud Detection API",
+        "version": "2024.11",
         "docs": "/docs"
     }
 

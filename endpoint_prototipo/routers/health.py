@@ -1,7 +1,7 @@
 """Health check router."""
 
 from fastapi import APIRouter
-from entrypoint.schemas import HealthResponse
+from endpoint_prototipo.schemas import HealthResponse
 
 router = APIRouter(prefix="/health", tags=["health"])
 
