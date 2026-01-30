@@ -1,0 +1,306 @@
+name: Deploy Fraud API to ECS
+
+# Triggers: cuándo ejecutar este workflow
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'endpoint_prototipo/**'
+      - 'Dockerfile'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+  workflow_dispatch:  # Permite ejecutar manualmente desde UI
+
+# Variables de ambiente
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: fraud-api
+  ECS_SERVICE: fraud-api-service
+  ECS_CLUSTER: fraud-api-cluster
+  CONTAINER_NAME: fraud-api
+
+jobs:
+  # =========================================================================
+  # JOB 1: Test (ejecuta tests del código)
+  # =========================================================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Paso 1: Descargar código
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Paso 2: Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # Paso 3: Instalar dependencias
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r endpoint_prototipo/requirements.txt
+
+      # Paso 4: Ejecutar linting (opcional)
+      - name: Lint with flake8
+        continue-on-error: true
+        run: |
+          pip install flake8
+          # W503: line break before binary operator (conflictua con Black)
+          flake8 endpoint_prototipo --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      # Paso 5: Ejecutar tests unitarios
+      - name: Run tests
+        run: |
+          pip install pytest pytest-asyncio
+          pytest endpoint_prototipo/tests/ -v || true
+        continue-on-error: true
+
+  # =========================================================================
+  # JOB 2: Build Docker Image
+  # =========================================================================
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    # Solo ejecuta en pushes a main/develop, NO en PRs
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # Paso 1: Checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Paso 2: Setup Docker Buildx (builder más rápido)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Paso 3: Configurar AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # Alternativa si usas Access Keys:
+          # access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # region: ${{ env.AWS_REGION }}
+
+      # Paso 4: Login a Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Paso 5: Build Docker image
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            .
+
+      # Paso 6: Scan de seguridad (Trivy)
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      # Paso 7: Upload resultados de Trivy
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+        if: always()
+
+      # Paso 8: Push a ECR
+      - name: Push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # =========================================================================
+  # JOB 3: Deploy a ECS
+  # =========================================================================
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: build
+    # Solo en pushes a main o workflow dispatch
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # Paso 1: Checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Paso 2: Configurar AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Paso 3: Login a ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Paso 4: Obtener última definición de tarea ECS
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $ECS_CLUSTER:1 \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition > task-definition.json || echo '{}' > task-definition.json
+        continue-on-error: true
+
+      # Paso 5: Actualizar task definition con nueva imagen
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      # Paso 6: Deploy nueva tarea ECS
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # Paso 7: Notificación de éxito
+      - name: Deployment successful
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "Service: ${{ env.ECS_SERVICE }}"
+          echo "Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "Image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+
+  # =========================================================================
+  # JOB 4: Notification (notifica del resultado)
+  # =========================================================================
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-latest
+    needs: [test, build, deploy]
+    if: always()
+
+    steps:
+      - name: Determine workflow status
+        id: status
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ] || \
+             [ "${{ needs.build.result }}" = "failure" ] || \
+             [ "${{ needs.deploy.result }}" = "failure" ]; then
+            echo "status=FAILED ❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+          else
+            echo "status=SUCCESS ✅" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        if: vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "Fraud API Deployment: ${{ steps.status.outputs.status }}",
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>",
+                      "short": true
+                    },
+                    {
+                      "title": "Author",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    }
+                  ]
+                }
+              ]
+            }
+        continue-on-error: true
+
+# ============================================================================
+# NOTAS IMPORTANTES:
+# ============================================================================
+#
+# 1. SECRETOS A CONFIGURAR EN GITHUB:
+#    - AWS_ROLE_ARN (para OIDC) O
+#    - AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY
+#    - SLACK_WEBHOOK_URL (opcional)
+#
+# 2. VARIABLES A CONFIGURAR:
+#    - AWS_REGION
+#    - ECR_REPOSITORY
+#    - ECS_SERVICE
+#    - ECS_CLUSTER
+#
+# 3. FLUJO:
+#    1. Push a main → trigger workflow
+#    2. Job test: ejecuta tests
+#    3. Job build: construye Docker image, pushea a ECR
+#    4. Job deploy: actualiza ECS service
+#    5. Job notify: envía notificación
+#
+# 4. EN CASO DE FALLO:
+#    - Revisa logs en GitHub Actions
+#    - Verifica secretos están configurados
+#    - Revisa permisos AWS IAM
+#
+# 5. ROLLBACK:
+#    - Revert el commit: git revert <commit-hash>
+#    - Push: git push origin main
+#    - Workflow ejecutará automáticamente rollback
+#

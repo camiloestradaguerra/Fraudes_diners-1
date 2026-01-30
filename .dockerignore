@@ -1,0 +1,87 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Documentation
+docs/_build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS/Terraform
+.terraform/
+terraform.tfvars
+*.tfstate*
+.env
+.env.local
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Misc
+*.log
+*.pot
+ngrok
+.ngrok2/
+README*.md
+QUICKSTART.md
+KERNEL_SETUP.md
+COMMANDS.md
+
+# Notebooks (opcional, si no los necesitas en producción)
+notebooks/
+
+# Local development
+local_*
+test_*

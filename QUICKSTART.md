@@ -1,23 +1,331 @@
-# 🚀 Guía Rápida: Análisis de Fraudes con eda.ipynb
+# 🚀 QUICK START: Deploy a AWS en 4 Pasos
 
-## ✅ Estado Actual
+**Resumen ejecutivo para deployar rápido tu API a producción profesional**
 
-- ✅ AWS CLI instalado y configurado
-- ✅ Credenciales AWS funcionando (cuenta: 822626720556)
-- ✅ Acceso al bucket S3: `dcelip-dev-brz-fraud-s3`
-- ✅ Archivo disponible: `df_fraudes.parquet` (1.35 MB, 63,019 registros, 27 columnas)
-- ✅ Ambiente virtual configurado con todas las dependencias
+---
 
-## 📊 Dataset Información
+## ⏱️ Tiempo Total: ~20 minutos
 
-**Ubicación:** `s3://dcelip-dev-brz-fraud-s3/modelo_fraude/input/raw/df_fraudes.parquet`
+---
 
-**Tamaño:** 
-- 63,019 registros
-- 27 columnas
+## 1️⃣ DOCKERFILE: "Empaquetar tu app"
 
-**Columnas principales:**
-- `FRecep`, `Socio`, `ID_TARJETA`, `Aut`
+**¿Qué es?** Una "receta" que describe cómo correr tu FastAPI en cualquier servidor.
+
+**¿Para qué sirve?**
+- Garantiza que funciona igual en tu PC, AWS, o cualquier lugar
+- Versiona exactamente qué dependencias usas
+- Elimina problemas de "en mi máquina funciona"
+
+**Ventajas:** ✅ Reproducibilidad, ✅ Fácil de testear, ✅ Isolamiento
+**Desventajas:** ❌ Aprende Docker, ❌ Imagen pesada (~2GB)
+
+**Archivo:** `Dockerfile` (raíz)
+
+**Quick Command:**
+```bash
+# Test localmente
+docker build -t fraud-api:local .
+docker run -p 8000:8000 fraud-api:local
+curl http://localhost:8000/health
+```
+
+---
+
+## 2️⃣ TERRAFORM: "Construir infraestructura"
+
+**¿Qué es?** Código que describe "crea un servidor, load balancer, database, etc." en AWS.
+
+**¿Para qué sirve?**
+- Define VPC, ECS Fargate, Load Balancer, API Gateway
+- Repetible: ejecuta 2x el mismo código = 2 ambientes idénticos
+- Controla todo desde código (no clicks en AWS Console)
+
+**Ventajas:** ✅ Repetible, ✅ Git control, ✅ Fácil de escalar
+**Desventajas:** ❌ Nueva sintaxis (HCL), ❌ Debugging complejo, ❌ Costo si falla
+
+**Archivos:**
+- `terraform/main.tf` - Recurso ECS, ALB, API Gateway
+- `terraform/variables.tf` - Variables (CPU, memoria, etc.)
+- `terraform/terraform.tfvars` - Tus valores específicos
+
+**Quick Command:**
+```bash
+cd terraform
+terraform init
+terraform plan      # Ver qué va a crear
+terraform apply     # CREAR (tarda ~10 min)
+terraform output    # Ver URLs resultantes
+```
+
+---
+
+## 3️⃣ GITHUB ACTIONS: "Automatizar deployment"
+
+**¿Qué es?** CI/CD: cada vez que pusheas código a GitHub, automáticamente:
+1. Corre tests
+2. Construye Docker image
+3. Pushea a ECR (registro de Docker)
+4. Actualiza ECS (AWS redeploya)
+
+**¿Para qué sirve?**
+- 0 pasos manuales: solo `git push` → API en producción en 3 min
+- Rollback fácil: revert commit = revert deployment
+- Historial: git log = deployment log
+
+**Ventajas:** ✅ Automatización 1-click, ✅ Rollback fácil, ✅ Historial
+**Desventajas:** ❌ Debugging en nube es difícil, ❌ Secretos a gestionar
+
+**Archivo:** `.github/workflows/deploy.yml`
+
+**Quick Setup:**
+```bash
+# En GitHub Repo Settings → Secrets and variables:
+Agregar:
+  AWS_ROLE_ARN (u AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+  DOCKERHUB_USERNAME
+  DOCKERHUB_PASSWORD
+  AWS_ACCOUNT_ID
+  AWS_REGION
+```
+
+**Resultado:** Cada `git push main` → deployment automático
+
+---
+
+## 4️⃣ DOCUMENTACIÓN: "Entender y mantener"
+
+**¿Qué es?** Este archivo que estás leyendo + AWS_DEPLOYMENT_GUIDE.md + MANUAL_DEPLOYMENT.md
+
+**¿Para qué sirve?**
+- Onboarding del equipo
+- Reference cuando algo falla
+- Decisiones arquitectónicas explicadas
+
+**Ventajas:** ✅ Facilita onboarding, ✅ Troubleshooting rápido
+**Desventajas:** ❌ Requiere mantenimiento
+
+**Archivos:**
+- `AWS_DEPLOYMENT_GUIDE.md` - Guía completa (este que leíste)
+- `MANUAL_DEPLOYMENT.md` - Pasos manuales sin GitHub Actions
+- `QUICKSTART.md` - Este archivo
+
+---
+
+## 🎯 Pasos a Seguir (Orden Correcto)
+
+### **DÍA 1: Preparación**
+```bash
+# 1. Instalar tools (5 min)
+# - AWS CLI, Docker, Terraform
+
+# 2. Configurar AWS
+aws configure
+# Ingresa: Access Key, Secret Key, región
+
+# 3. Testear Docker localmente (5 min)
+docker build -t fraud-api:local .
+docker run -p 8000:8000 fraud-api:local
+curl http://localhost:8000/docs
+```
+
+### **DÍA 2: Deploy Infraestructura**
+```bash
+# 1. Editar terraform/terraform.tfvars (2 min)
+# Cambiar valores según necesidades
+
+# 2. Crear infraestructura (10 min)
+cd terraform
+terraform init
+terraform plan
+terraform apply
+# Confirma con "yes"
+
+# 3. Ver URLs resultantes
+terraform output
+# Copia api_gateway_endpoint
+```
+
+### **DÍA 3: Configura CI/CD (opcional pero recomendado)**
+```bash
+# 1. Push código a GitHub (con Dockerfile, terraform/**, .github/**)
+
+# 2. En GitHub → Settings → Secrets:
+# Agrega AWS credenciales
+
+# 3. Haz commit test
+git commit -m "Setup CI/CD"
+git push origin main
+
+# Ve a GitHub → Actions
+# Verás tu workflow corriendo
+# ~3 min después: API en producción
+```
+
+### **DÍA 4: Migra usuarios de ngrok**
+```bash
+# 1. Obtén URL de API Gateway
+terraform output -raw api_gateway_endpoint
+
+# 2. Reemplaza en clientes:
+# De: https://xxx.ngrok.io/fraud/predict
+# A:  https://yyy.execute-api.us-east-1.amazonaws.com/prod/fraud/predict
+
+# 3. Verifica que funciona
+curl -X POST https://yyy.execute-api.../fraud/predict \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_id":"TRX1", "monto":100, "edad":35, ...}'
+```
+
+---
+
+## 💰 Costos Reales
+
+```
+ECS Fargate (2 replicas, 24h):    $60/mes
+API Gateway (100k requests):      $3-10/mes
+Load Balancer (ALB):              $16/mes
+Networking (data out):            $0-5/mes
+CloudWatch Logs:                  $5-10/mes
+---
+TOTAL:                            $85-100/mes
+
+vs ngrok: $5-15/mes (pero limitado, temporal)
+vs EC2: $100-200/mes (pero mantenimiento)
+```
+
+---
+
+## 🔄 Workflow Después de Setup
+
+### Desarrollo Local
+```bash
+# 1. Hacer cambios
+vim endpoint_prototipo/main.py
+
+# 2. Test localmente
+docker build -t fraud-api:test .
+docker run -p 8000:8000 fraud-api:test
+
+# 3. Commit y push
+git add .
+git commit -m "Feature: nuevo endpoint"
+git push origin main
+
+# 4. Automáticamente:
+# ✓ Tests corren
+# ✓ Docker image se construye
+# ✓ Pushea a ECR
+# ✓ ECS se actualiza
+# ✓ ~3 minutos: en producción ✨
+```
+
+### Monitoreo
+```bash
+# Ver logs en tiempo real
+aws logs tail /ecs/fraud-api --follow
+
+# Ver métricas (CPU, memoria)
+AWS Console → ECS → Clusters → fraud-api-cluster
+
+# Alertas
+AWS Console → CloudWatch → Alarms
+(Configura: si CPU > 80%, notifica)
+```
+
+### Escalar
+```bash
+# Más tráfico? Aumenta contenedores:
+# Edita terraform/terraform.tfvars:
+ecs_max_capacity = 10  # en lugar de 5
+
+# Aplica:
+terraform apply
+
+# Auto-scaling hará el resto
+```
+
+---
+
+## 🆘 Si Algo Falla
+
+| Error | Solución |
+|-------|----------|
+| "Connection refused" | ¿ECS tasks están corriendo? `aws ecs describe-services ...` |
+| "502 Bad Gateway" | Load Balancer no tiene targets. Espera 2-3 min o verifica health checks |
+| "Docker push fails" | ¿Credenciales ECR? `aws ecr get-login-password \| docker login ...` |
+| "Terraform plan error" | ¿AWS credentials correctas? `aws sts get-caller-identity` |
+| "Containers exit" | Ver logs: `aws logs tail /ecs/fraud-api` |
+
+---
+
+## 📚 Archivos Importantes
+
+```
+Proyecto/
+├── Dockerfile               ← Receta Docker
+├── .dockerignore           ← Archivos a NO incluir
+├── terraform/
+│   ├── main.tf             ← Infraestructura
+│   ├── variables.tf        ← Variables
+│   ├── outputs.tf          ← URLs resultantes
+│   └── terraform.tfvars    ← TUS VALORES
+├── .github/workflows/
+│   └── deploy.yml          ← CI/CD automation
+├── AWS_DEPLOYMENT_GUIDE.md ← Guía completa (TU PRINCIPAL REFERENCIA)
+├── MANUAL_DEPLOYMENT.md    ← Pasos sin CI/CD
+└── QUICKSTART.md           ← Este archivo
+```
+
+---
+
+## ✅ Checklist Deployment
+
+- [ ] AWS CLI configurado (`aws sts get-caller-identity` funciona)
+- [ ] Docker instalado (`docker --version`)
+- [ ] Terraform instalado (`terraform --version`)
+- [ ] `Dockerfile` creado y testeado localmente
+- [ ] `terraform/` configurado (main.tf, variables.tf, outputs.tf)
+- [ ] `terraform.tfvars` editado con tus valores
+- [ ] `terraform apply` ejecutado exitosamente
+- [ ] `terraform output` muestra URLs
+- [ ] API responde en `${API_URL}/health`
+- [ ] GitHub Actions configurado (opcional)
+- [ ] Usuarios migrados de ngrok a nueva URL
+
+---
+
+## 🎓 Siguientes Pasos
+
+1. **Ahora:** Lee `AWS_DEPLOYMENT_GUIDE.md` completo
+2. **Luego:** Ejecuta Pasos 1-2 de "Pasos a Seguir" arriba
+3. **Después:** Configura GitHub Actions (Paso 3)
+4. **Finalmente:** Establece monitoreo + alertas
+
+---
+
+## 📞 Preguntas Frecuentes
+
+**P: ¿Cuándo pierdo los datos si Terraform destroy?**
+R: No hay base de datos. Pero sí pierdes logs en CloudWatch.
+
+**P: ¿Puedo parar sin destruir?**
+R: Sí, reduce `desired_count` a 0 sin `destroy`.
+
+**P: ¿Cómo rollback si salió mal?**
+R: `git revert <commit>` + `git push` → redeploya automáticamente.
+
+**P: ¿Cómo agregar dominio custom (fraud-api.miempresa.com)?**
+R: Route53 + Certificate Manager (documentado en AWS_DEPLOYMENT_GUIDE.md).
+
+**P: ¿Y si necesito base de datos?**
+R: Agrega `aws_rds_instance` a Terraform (RDS MySQL/PostgreSQL).
+
+---
+
+**Última actualización:** 2026-01-30
+**Autor:** Data Science Team
+**Status:** ✅ Listo para producción
 - `Ffraud`, `TipoFraude`, `Decision`
 - `Valor`, `Pais`, `Entidad`, `Marca`
 - Y 16 columnas más...
