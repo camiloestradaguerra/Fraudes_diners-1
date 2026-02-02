@@ -1,10 +1,9 @@
-# Stage 1: Builder
-# Este stage construye las dependencias necesarias
-FROM public.ecr.aws/docker/library/python:3.11-slim as builder
+# ETAPA 1: Construcción
+FROM public.ecr.aws/docker/library/python:3.11-slim AS builder
 
 WORKDIR /build
 
-# Instalar compiladores y dependencias del sistema necesarias para Torch
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -12,48 +11,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements
+# Copiar requirements y pre-compilar
 COPY endpoint_prototipo/requirements.txt .
-
-# Pre-compilar wheels (acelera runtime)
 RUN pip install --user --no-cache-dir --compile -r requirements.txt
 
-# Stage 2: Runtime
-# Imagen final más limpia y pequeña
+# ETAPA 2: Runtime (Imagen Final)
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
 WORKDIR /app
 
-# Instalar solo dependencias de runtime (no compiladores)
+# Instalar librerías de ejecución
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar dependencias precompiladas del builder
+# Copiar dependencias del builder
 COPY --from=builder /root/.local /root/.local
 
-# Copiar código de la aplicación
+# Copiar TODO el código del proyecto
 COPY . .
 
-# Configurar PATH para usar las dependencias del usuario
+# Configuración de entorno
 ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Verificar que FastAPI/Uvicorn están disponibles
-RUN python -c "import fastapi; import uvicorn; print(f'FastAPI: {fastapi.__version__}')" || exit 1
-
-# Copiar script de entrada para SageMaker
-COPY serve /usr/local/bin/serve
-RUN chmod +x /usr/local/bin/serve
-
-# Exponer puerto (SageMaker usa 8080 por defecto, pero también aceptamos 8000)
+# Puerto SageMaker
 EXPOSE 8080
 
-# ENTRYPOINT para SageMaker - ejecuta el script serve
-ENTRYPOINT ["serve"]
+# --- EL CAMBIO CLAVE ESTÁ AQUÍ ---
+# Usamos el modo "Shell" (sin corchetes) para que ignore el argumento 'serve' de SageMaker
+ENTRYPOINT uvicorn endpoint_prototipo.main:app --host 0.0.0.0 --port 8080
 
-# Metadata (útil para debugging)
-LABEL maintainer="Data Science Team" \
-      version="1.0" \
-      description="Fraud Detection API using FastAPI and PyTorch"
+LABEL maintainer="Data Science Team" version="2.0"

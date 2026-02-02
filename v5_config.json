@@ -1,0 +1,6 @@
+[{
+    "VariantName": "AllTraffic",
+    "ModelName": "modelo-fraudes-v5",
+    "InitialInstanceCount": 1,
+    "InstanceType": "ml.m5.4xlarge"
+}]

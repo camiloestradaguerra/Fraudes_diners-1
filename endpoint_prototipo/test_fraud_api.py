@@ -11,11 +11,9 @@ from typing import Dict, Any
 # ==========================================================
 # CONFIGURACIÓN DEL ENTORNO
 # ==========================================================
-# 1. Ejecuta en tu terminal: ngrok http 8000
-# 2. Copia la URL https que te arroje y pégala aquí:
+# Asegúrate de que esta URL sea la correcta de tu sesión actual de Ngrok
 BASE_URL = "https://nondistillable-audriana-satiably.ngrok-free.dev" 
 
-# Header obligatorio para saltar el aviso de seguridad de Ngrok
 HEADERS = {
     "ngrok-skip-browser-warning": "true",
     "Content-Type": "application/json"
@@ -28,6 +26,7 @@ def test_health_check(url: str) -> Dict[str, Any]:
     print("="*60)
     
     try:
+        # El router tiene el prefijo /health/ y el endpoint es /
         response = requests.get(f"{url}/health/", headers=HEADERS)
         response.raise_for_status()
         print(f"Status Code: {response.status_code}")
@@ -52,6 +51,7 @@ def test_single_prediction(url: str) -> Dict[str, Any]:
         "especialidad": "RESTAURANTES"
     }
     
+    # El router tiene prefijo /fraud y el endpoint es /predict
     response = requests.post(f"{url}/fraud/predict", json=payload, headers=HEADERS)
     print(f"Status Code: {response.status_code}")
     print(f"Response:\n{json.dumps(response.json(), indent=2)}")
@@ -82,6 +82,7 @@ def test_batch_prediction(url: str) -> list:
         }
     ]
     
+    # CORRECCIÓN: Se usa la variable 'payloads' que contiene la lista
     response = requests.post(f"{url}/fraud/batch-predict", json=payloads, headers=HEADERS)
     print(f"Status Code: {response.status_code}")
     print(f"Response:\n{json.dumps(response.json(), indent=2)}")
@@ -104,6 +105,7 @@ def test_high_risk_transaction(url: str) -> Dict[str, Any]:
     
     response = requests.post(f"{url}/fraud/predict", json=payload, headers=HEADERS)
     print(f"Status Code: {response.status_code}")
+    # Se retorna el json para la comparación final
     return response.json()
 
 def compare_predictions(low_risk: Dict, high_risk: Dict) -> None:
@@ -112,7 +114,7 @@ def compare_predictions(low_risk: Dict, high_risk: Dict) -> None:
     print("Fraud Risk Comparison")
     print("="*60)
     
-    # Ajusté los nombres de las llaves basado en tu lógica de respuesta
+    # ml_score_0_999 es el campo definido en FraudPredictionResponse
     low_score = low_risk.get("ml_score_0_999", 0)
     high_score = high_risk.get("ml_score_0_999", 0)
     
