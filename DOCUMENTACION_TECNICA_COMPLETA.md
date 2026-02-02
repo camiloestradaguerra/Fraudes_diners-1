@@ -25,6 +25,36 @@
 
 ---
 
+⚠️ **⚠️ ADVERTENCIA CRÍTICA ⚠️ ⚠️**
+
+```
+🚨 ESTE DESPLIEGUE ESTÁ INCOMPLETO EN ESTOS ASPECTOS:
+
+1. ❌ El modelo ML NO está cargado realmente
+   - Archivo: endpoint_prototipo/routers/fraud_prediction.py
+   - Línea 18: MODEL = "fraud_model_loaded"  # PLACEHOLDER
+   - Acción requerida: Implementar load_model() con joblib.load('/ruta/al/modelo.pkl')
+
+2. ❌ Las predicciones son MOCK (no son reales)
+   - Línea 37-47: Cálculo simulado basado en monto × 2
+   - Acción requerida: Reemplazar con llamada a MODEL.predict()
+
+3. ❌ No hay persistencia de logs en CloudWatch
+   - Acción requerida: Configurar Python logging con CloudWatch handler
+
+4. ⚠️ El modelo está almacenado LOCALMENTE en la imagen
+   - Problema: Cambios de modelo requieren rebuild de imagen
+   - Recomendación: Usar S3 para almacenamiento de modelos
+
+5. ⚠️ Auto-scaling NO está habilitado
+   - Acción requerida: Ejecutar comandos de application-autoscaling
+
+ESTA DOCUMENTACIÓN ES 100% VÁLIDA PARA LA INFRAESTRUCTURA AWS.
+PERO EL MODELO PREDICTOR AÚN NECESITA IMPLEMENTACIÓN.
+```
+
+---
+
 ## 🎯 Resumen Ejecutivo
 
 Se ha implementado un servicio de inferencia escalable en la nube de AWS para la detección de fraudes en transacciones de Diners Club. La arquitectura combina:
@@ -119,27 +149,57 @@ endpoint_prototipo/
 └── requirements.txt             # Dependencias Python
 ```
 
-**Dockerfile - Especificaciones:**
+**Dockerfile - Especificaciones (REAL):**
 
 ```dockerfile
-# Stage 1: Builder
+# ETAPA 1: Construcción
 FROM public.ecr.aws/docker/library/python:3.11-slim AS builder
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Stage 2: Runtime
+WORKDIR /build
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements y pre-compilar
+COPY endpoint_prototipo/requirements.txt .
+RUN pip install --user --no-cache-dir --compile -r requirements.txt
+
+# ETAPA 2: Runtime (Imagen Final)
 FROM public.ecr.aws/docker/library/python:3.11-slim
+
 WORKDIR /app
+
+# Instalar librerías de ejecución
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar dependencias del builder
 COPY --from=builder /root/.local /root/.local
+
+# Copiar TODO el código del proyecto
 COPY . .
 
-ENV PATH=/root/.local/bin:$PATH
-ENV PYTHONUNBUFFERED=1
+# Configuración de entorno
+ENV PATH=/root/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
+# Puerto SageMaker
 EXPOSE 8080
-ENTRYPOINT ["python", "-m", "uvicorn", "endpoint_prototipo.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# Entrypoint para SageMaker (sin corchetes para ignorar argumento 'serve')
+ENTRYPOINT uvicorn endpoint_prototipo.main:app --host 0.0.0.0 --port 8080
+
+LABEL maintainer="Data Science Team" version="2.0"
 ```
+
+⚠️ **NOTA IMPORTANTE:** El ENTRYPOINT está en modo "Shell" (sin corchetes) porque SageMaker por defecto intenta ejecutar `docker run <image> serve` y así ignora ese argumento.
 
 **Características del Contenedor:**
 
@@ -736,7 +796,7 @@ Rate Limiting (API Gateway):
    ```
    Content-Type: application/json
    ```
-5. **Body (JSON):**
+5. **Body (JSON) - CORRECTO:**
    ```json
    {
        "transaction_id": "TRX123456",
@@ -747,15 +807,24 @@ Rate Limiting (API Gateway):
        "especialidad": "RESTAURANTES"
    }
    ```
+   
+   ⚠️ **Campo `especialidad` es opcional** (default: "GENERAL")
 6. **Enviar**
 
 **Respuesta esperada (200 OK):**
 ```json
-{
-    "schema_version": "1.0",
+{request_id": "REQ-ABC12",
     "ml_score_0_999": 301.0,
-    "latency_ms": 45,
-    "prediction": "legitimate"
+    "model_meta": {
+        "name": "fraud_model_prod",
+        "version": "2024.11",
+        "provider": "ExternalVendor"
+    },
+    "latency_ms": 45
+}
+```
+
+**Nota:** El score 301 indica baja probabilidad de fraude (< 500 = "legitimate") "prediction": "legitimate"
 }
 ```
 
@@ -854,69 +923,53 @@ Write-Host "Response: $($response.Content)"
 
 ## 📊 Especificaciones Técnicas Detalladas
 
-### Schema de Solicitud (Request)
+### Schema de Solicitud (Request) - REAL
 
 ```json
 {
     "type": "object",
-    "required": ["transaction_amount", "transaction_type", "day_of_week", "hour"],
+    "required": ["transaction_id", "monto", "edad", "ciudad", "establecimiento"],
     "properties": {
         "transaction_id": {
             "type": "string",
             "description": "ID único de la transacción",
             "example": "TRX123456"
         },
-        "transaction_amount": {
+        "monto": {
             "type": "number",
             "description": "Monto de la transacción en dólares",
             "minimum": 0,
             "example": 150.50
         },
-        "transaction_type": {
-            "type": "string",
-            "enum": ["debit", "credit", "transfer"],
-            "description": "Tipo de transacción",
-            "example": "debit"
-        },
-        "day_of_week": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 6,
-            "description": "Día de la semana (0=lunes, 6=domingo)",
-            "example": 3
-        },
-        "hour": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 23,
-            "description": "Hora del día (formato 24h)",
-            "example": 14
-        },
         "edad": {
             "type": "integer",
-            "description": "Edad del titular (opcional)",
+            "minimum": 18,
+            "maximum": 120,
+            "description": "Edad del titular",
             "example": 35
         },
         "ciudad": {
             "type": "string",
-            "description": "Ciudad de residencia (opcional)",
+            "description": "Ciudad donde ocurrió la transacción",
             "example": "Quito"
         },
         "establecimiento": {
             "type": "string",
-            "description": "Nombre del comercio (opcional)",
+            "description": "Nombre del comercio",
             "example": "RestaurantXYZ"
         },
         "especialidad": {
             "type": "string",
-            "description": "Categoría del comercio (opcional)",
+            "description": "Categoría del comercio (default: GENERAL)",
             "example": "RESTAURANTES"
         }
     }
 }
 ```
 
-### Schema de Respuesta (Response)
+**Cambio importante:** Los campos REALES son `monto`, `edad`, `ciudad`, `establecimiento` - NO `transaction_amount`, `transaction_type`, etc.
+
+### Schema de Respuesta (Response) - REAL
 
 ```json
 {
@@ -927,30 +980,47 @@ Write-Host "Response: $($response.Content)"
             "description": "Versión del schema de respuesta",
             "example": "1.0"
         },
+        "request_id": {
+            "type": "string",
+            "description": "ID único de la solicitud",
+            "example": "REQ-ABC12"
+        },
         "ml_score_0_999": {
             "type": "number",
+            "minimum": 0,
+            "maximum": 999,
             "description": "Score de riesgo de fraude (0-999)",
             "example": 301.0
         },
+        "model_meta": {
+            "type": "object",
+            "description": "Metadatos del modelo",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "fraud_model_prod"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "2024.11"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "ExternalVendor"
+                }
+            }
+        },
         "latency_ms": {
             "type": "number",
+            "minimum": 0,
             "description": "Latencia de procesamiento en milisegundos",
             "example": 45
-        },
-        "prediction": {
-            "type": "string",
-            "enum": ["fraud", "legitimate"],
-            "description": "Predicción final",
-            "example": "legitimate"
-        },
-        "confidence": {
-            "type": "number",
-            "description": "Nivel de confianza (0-1)",
-            "example": 0.95
         }
     }
 }
 ```
+
+**Cambio importante:** La respuesta incluye `request_id` y `model_meta` adicionales. NO incluye `prediction` directamente (se debe derivar del score).
 
 ### Códigos HTTP Esperados
 
@@ -1464,19 +1534,113 @@ Cambio a ml.m5.large (más poderoso):
 - [ ] **Cost Optimization**: Migrar a Spot instances para reducir costos
 - [ ] **Multi-Region**: Desplegar a otras regiones (us-west-2, eu-west-1)
 
-### Checklist de Producción
+### Checklist para Redeploy desde Cero
 
-- [x] ✅ Modelo entrenado y validado
-- [x] ✅ Docker image construida y en ECR
-- [x] ✅ SageMaker endpoint en InService
-- [x] ✅ API Gateway expuesta públicamente
-- [x] ✅ IAM roles configurados con permisos mínimos
-- [ ] ⏳ Logs centralizados en CloudWatch
-- [ ] ⏳ Alertas configuradas
-- [ ] ⏳ Backup strategy definida
-- [ ] ⏳ Disaster recovery plan creado
-- [ ] ⏳ SLA documentado
-- [ ] ⏳ Runbook de troubleshooting completado
+**⚠️ ANTES DE HACER PUSH A ECR NUEVAMENTE:**
+
+```
+PRE-DESPLIEGUE:
+─────────────────
+□ PASO 1: Actualizar el modelo ML
+  ├─ Verificar archivo modelo.pkl existe en ./models/
+  ├─ Actualizar endpoint_prototipo/routers/fraud_prediction.py
+  │  └─ Reemplazar "MODEL = 'fraud_model_loaded'" con: 
+  │     MODEL = joblib.load('models/fraud_detection_model.pkl')
+  └─ Probar localmente: python -m pytest endpoint_prototipo/
+
+□ PASO 2: Validar requirements.txt
+  └─ Ejecutar: pip install -r endpoint_prototipo/requirements.txt
+     (Asegurar que todos los imports funcionan)
+
+□ PASO 3: Construir Docker localmente
+  └─ Ejecutar:
+     docker build -t fraudes-diners:test .
+     docker run -p 8080:8080 fraudes-diners:test
+     
+     Probar en terminal:
+     curl http://localhost:8080/ping          # Debe retornar {"status": "ok"}
+     curl -X POST http://localhost:8080/invocations \
+       -H "Content-Type: application/json" \
+       -d '{"transaction_id":"TRX1","monto":100,"edad":30,"ciudad":"Quito","establecimiento":"Store1"}'
+
+□ PASO 4: Configurar AWS credentials
+  └─ Verificar: aws sts get-caller-identity
+     (Debe mostrar tu Account ID: 822626720556)
+
+REDEPLOY:
+──────────
+□ PASO 5: Push a ECR (Build nuevo)
+  ├─ Verificar credenciales ECR:
+  │  aws ecr get-login-password --region us-east-1 | \
+  │    docker login --username AWS --password-stdin \
+  │    822626720556.dkr.ecr.us-east-1.amazonaws.com
+  │
+  ├─ Tag de nueva imagen:
+  │  docker tag fraudes-diners:test \
+  │    822626720556.dkr.ecr.us-east-1.amazonaws.com/fraudes-diners:latest
+  │
+  └─ Push (toma ~10-15 minutos):
+     docker push 822626720556.dkr.ecr.us-east-1.amazonaws.com/fraudes-diners:latest
+
+□ PASO 6: Actualizar SageMaker Endpoint
+  ├─ Crear nueva EndpointConfig (opcional si cambió la configuración):
+  │  aws sagemaker create-endpoint-config \
+  │    --endpoint-config-name config-fraudes-diners-$(date +%s) \
+  │    --production-variants \
+  │      VariantName=AllTraffic,\
+  │      ModelName=modelo-fraudes-diners-v1,\
+  │      InitialInstanceCount=1,\
+  │      InstanceType=ml.t2.medium \
+  │    --region us-east-1
+  │
+  ├─ Actualizar Endpoint (redeploy):
+  │  aws sagemaker update-endpoint \
+  │    --endpoint-name endpoint-fraudes-v5 \
+  │    --endpoint-config-name config-fraudes-diners-$(date +%s) \
+  │    --region us-east-1
+  │
+  └─ Esperar a que cambie estado:
+     aws sagemaker describe-endpoint \
+       --endpoint-name endpoint-fraudes-v5 \
+       --query 'EndpointStatus' \
+       --region us-east-1
+     
+     # Esperar a que diga "InService" (5-10 minutos)
+
+□ PASO 7: Verificar endpoint actualizado
+  └─ Probar desde AWS CLI:
+     python test_final.py
+
+VALIDACIÓN:
+────────────
+□ PASO 8: Testear API Gateway
+  └─ Postman o curl:
+     curl -X POST \
+       https://dbsr0cv160.execute-api.us-east-1.amazonaws.com/prod/fraude \
+       -H "Content-Type: application/json" \
+       -d '{
+         "transaction_id":"TRX123",
+         "monto":150.50,
+         "edad":35,
+         "ciudad":"Quito",
+         "establecimiento":"RestaurantXYZ",
+         "especialidad":"RESTAURANTES"
+       }'
+     
+     # Debe retornar JSON con score y latencia
+
+□ PASO 9: Revisar CloudWatch Logs
+  └─ aws logs tail /aws/sagemaker/Endpoints/endpoint-fraudes-v5 --follow
+
+DOCUMENTACIÓN:
+──────────────
+□ PASO 10: Actualizar DOCUMENTACION_TECNICA_COMPLETA.md
+  ├─ Actualizar fecha
+  ├─ Actualizar versión del modelo
+  └─ Documentar cualquier cambio realizado
+```
+
+**Tiempo estimado de redeploy completo:** 25-35 minutos
 
 ---
 

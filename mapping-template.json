@@ -1,5 +1,0 @@
-{
-  "EndpointName": "endpoint-fraudes-v5",
-  "Body": $input.json('$'),
-  "ContentType": "application/json"
-}
