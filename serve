@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Script de entrada para SageMaker
+# SageMaker ejecuta este script con: docker run <image> serve
+
+# Iniciar Uvicorn en puerto 8080 (SageMaker usa este puerto por defecto)
+python -m uvicorn endpoint_prototipo.main:app --host 0.0.0.0 --port 8080

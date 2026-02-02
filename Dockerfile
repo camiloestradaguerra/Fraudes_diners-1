@@ -43,15 +43,15 @@ ENV PATH=/root/.local/bin:$PATH \
 # Verificar que FastAPI/Uvicorn están disponibles
 RUN python -c "import fastapi; import uvicorn; print(f'FastAPI: {fastapi.__version__}')" || exit 1
 
-# Exponer puerto (ECS lo configurará en load balancer)
-EXPOSE 8000
+# Copiar script de entrada para SageMaker
+COPY serve /usr/local/bin/serve
+RUN chmod +x /usr/local/bin/serve
 
-# CMD ejecuta la aplicación
-# Formato: uvicorn modulo:app --host --port
-CMD ["python", "-m", "uvicorn", \
-     "endpoint_prototipo.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000"]
+# Exponer puerto (SageMaker usa 8080 por defecto, pero también aceptamos 8000)
+EXPOSE 8080
+
+# ENTRYPOINT para SageMaker - ejecuta el script serve
+ENTRYPOINT ["serve"]
 
 # Metadata (útil para debugging)
 LABEL maintainer="Data Science Team" \
