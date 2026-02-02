@@ -1,0 +1,12 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::822626720556:role/AWSReservedSSO_Lakehouse-noprod-team_9e734b7fb3b82fad"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}

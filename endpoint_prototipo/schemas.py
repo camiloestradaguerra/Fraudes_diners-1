@@ -37,6 +37,8 @@ class ModelMeta(BaseModel):
 class FraudPredictionResponse(BaseModel):
     """Response schema for fraud prediction."""
     
+    model_config = {"protected_namespaces": ()}
+    
     schema_version: str = Field(..., description="API schema version")
     request_id: str = Field(..., description="Request identifier")
     ml_score_0_999: float = Field(..., ge=0, le=999, description="Fraud risk score (0-999)")
@@ -46,6 +48,8 @@ class FraudPredictionResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
+    
+    model_config = {"protected_namespaces": ()}
     
     status: str
     model_loaded: bool

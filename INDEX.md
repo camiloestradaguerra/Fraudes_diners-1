@@ -1,4 +1,4 @@
-# 📚 ÍNDICE COMPLETO: Documentación AWS Deployment
+elimin# 📚 ÍNDICE COMPLETO: Documentación AWS Deployment
 
 **Guía de navegación para todos los documentos creados**
 
@@ -6,17 +6,25 @@
 
 ## 🎯 ¿POR DÓNDE EMPIEZO?
 
-### Si tienes 5 minutos:
-→ Lee [QUICKSTART.md](QUICKSTART.md)
+### ⭐ NUEVO: FastAPI Funcional (30 Enero 2026)
+**La API está corriendo sin Terraform. Hemos migrado a CloudFormation.**
 
-### Si tienes 30 minutos:
-→ Lee [COMPONENTS_SUMMARY.md](COMPONENTS_SUMMARY.md)
+### Si tienes 3 minutos:
+→ Lee [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)
 
-### Si tienes 2 horas:
-→ Lee [AWS_DEPLOYMENT_GUIDE.md](AWS_DEPLOYMENT_GUIDE.md)
+### Si tienes 10 minutos:
+→ Lee [START_API.md](START_API.md) - Cómo ejecutar localmente
 
-### Si ya quieres deployar:
-→ Sigue [MANUAL_DEPLOYMENT.md](MANUAL_DEPLOYMENT.md)
+### Si tienes 20 minutos:
+→ Lee [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) - Resumen técnico
+
+### Si quieres ver la API corriendo:
+```bash
+python -m uvicorn endpoint_prototipo.main:app --host 127.0.0.1 --port 8000
+```
+
+### Si quieres deployar a AWS:
+→ Sigue [cloudformation/DEPLOYMENT_GUIDE.md](cloudformation/DEPLOYMENT_GUIDE.md)
 
 ---
 

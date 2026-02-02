@@ -36,10 +36,21 @@ class ModelHandler(default_inference_handler.DefaultInferenceHandler):
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from endpoint_prototipo.routers import health, fraud_prediction
 
-# Initialize FastAPI app
+# Create lifespan context
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan."""
+    # Startup: Load model
+    fraud_prediction.load_model()
+    yield
+    # Shutdown
+    print("[MAIN] Application shutdown")
+
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Fraud Detection API",
     description="Real-time fraud detection model for transaction prediction",
@@ -47,7 +58,8 @@ app = FastAPI(
     contact={
         "name": "Data Science Team",
         "email": "contact@example.com"
-    }
+    },
+    lifespan=lifespan
 )
 
 # Add CORS middleware

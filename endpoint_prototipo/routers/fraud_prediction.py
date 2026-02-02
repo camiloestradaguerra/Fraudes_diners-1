@@ -3,11 +3,10 @@
 import time
 import uuid
 from datetime import datetime
+from contextlib import asynccontextmanager
 from fastapi import APIRouter, HTTPException
 
 from endpoint_prototipo.schemas import FraudPredictionRequest, FraudPredictionResponse, ModelMeta
-
-router = APIRouter(prefix="/fraud", tags=["fraud"])
 
 # Global variables for model (loaded once at startup)
 MODEL = None
@@ -22,12 +21,20 @@ def load_model():
     # This is a placeholder for the fraud detection model
     # You can load your trained model here using joblib, torch, or other frameworks
     MODEL = "fraud_model_loaded"  # Placeholder
+    print("[FRAUD_PREDICTION] Model loaded successfully")
 
 
-@router.on_event("startup")
-async def startup_event():
-    """Load model on startup."""
+@asynccontextmanager
+async def lifespan(app):
+    """Application lifespan context manager."""
+    # Startup
     load_model()
+    yield
+    # Shutdown
+    print("[FRAUD_PREDICTION] Application shutting down")
+
+
+router = APIRouter(prefix="/fraud", tags=["fraud"])
 
 
 @router.post("/predict", response_model=FraudPredictionResponse)

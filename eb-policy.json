@@ -1,0 +1,43 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ElasticBeanstalkFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "elasticbeanstalk:*",
+        "ec2:*",
+        "rds:*",
+        "autoscaling:*",
+        "elasticloadbalancing:*",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfiles",
+        "iam:GetInstanceProfile",
+        "cloudformation:*",
+        "cloudwatch:*",
+        "logs:*",
+        "s3:*",
+        "sns:*",
+        "sqs:*",
+        "ecr:*",
+        "ecs:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PassRoleForEB",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::822626720556:role/aws-elasticbeanstalk-service-role",
+        "arn:aws:iam::822626720556:role/aws-elasticbeanstalk-ec2-role",
+        "arn:aws:iam::822626720556:instance-profile/aws-elasticbeanstalk-ec2-instance-profile"
+      ]
+    }
+  ]
+}
