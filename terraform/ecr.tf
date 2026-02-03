@@ -103,13 +103,13 @@ resource "null_resource" "docker_push" {
 # ============================================================
 # Verify ECR Image
 # ============================================================
-
-data "aws_ecr_image" "fraud_detection" {
-  depends_on = [null_resource.docker_push]
-
-  repository_name = aws_ecr_repository.fraud_detection.name
-  image_tag       = var.docker_image_tag
-}
+# DESHABILITADO: Causaba errores cuando la imagen no existe en ECR
+# data "aws_ecr_image" "fraud_detection" {
+#   depends_on = [null_resource.docker_push]
+#
+#   repository_name = aws_ecr_repository.fraud_detection.name
+#   image_tag       = var.docker_image_tag
+# }
 
 # ============================================================
 # AWS CodeBuild Project for Docker Build
