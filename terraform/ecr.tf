@@ -110,3 +110,62 @@ data "aws_ecr_image" "fraud_detection" {
   repository_name = aws_ecr_repository.fraud_detection.name
   image_tag       = var.docker_image_tag
 }
+
+# ============================================================
+# AWS CodeBuild Project for Docker Build
+# ============================================================
+
+resource "aws_codebuild_project" "docker_build" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name          = "${var.project_name}-docker-build-${var.environment}"
+  service_role  = aws_iam_role.codebuild_role[0].arn
+
+  artifacts {
+    type = "NO_ARTIFACTS"
+  }
+
+  source {
+    type            = "GITHUB"
+    location        = var.github_repository_url
+    git_clone_depth = 1
+  }
+
+  environment {
+    compute_type                = var.codebuild_compute_type
+    image                      = "aws/codebuild/standard:7.0"
+    type                       = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name  = aws_cloudwatch_log_group.codebuild[0].name
+      stream_name = aws_cloudwatch_log_stream.codebuild[0].name
+    }
+  }
+
+  source_version = var.github_branch
+
+  tags = local.common_tags
+}
+
+# ============================================================
+# CloudWatch Log Group para CodeBuild
+# ============================================================
+
+resource "aws_cloudwatch_log_group" "codebuild" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name              = "/aws/codebuild/${var.project_name}-docker-build-${var.environment}"
+  retention_in_days = 7
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_log_stream" "codebuild" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name           = "docker-build-stream"
+  log_group_name = aws_cloudwatch_log_group.codebuild[0].name
+}

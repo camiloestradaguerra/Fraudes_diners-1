@@ -48,6 +48,21 @@ output "iam_role_sagemaker_arn" {
   value       = aws_iam_role.sagemaker_execution.arn
 }
 
+output "codebuild_project_name" {
+  description = "Nombre del proyecto CodeBuild"
+  value       = try(aws_codebuild_project.docker_build[0].name, "CodeBuild no habilitado")
+}
+
+output "codebuild_project_arn" {
+  description = "ARN del proyecto CodeBuild"
+  value       = try(aws_codebuild_project.docker_build[0].arn, "CodeBuild no habilitado")
+}
+
+output "codebuild_log_group" {
+  description = "CloudWatch Log Group para CodeBuild"
+  value       = try(aws_cloudwatch_log_group.codebuild[0].name, "CodeBuild no habilitado")
+}
+
 output "iam_role_apigateway_arn" {
   description = "ARN del rol API Gateway"
   value       = aws_iam_role.apigateway_sagemaker.arn

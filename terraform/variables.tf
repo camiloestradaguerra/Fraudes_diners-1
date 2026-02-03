@@ -39,6 +39,43 @@ variable "docker_build_context" {
   default     = ".."
 }
 
+variable "github_repository_url" {
+  description = "URL del repositorio GitHub"
+  type        = string
+  default     = "https://github.com/camiloestradaguerra/Fraudes_diners-1"
+}
+
+variable "github_branch" {
+  description = "Rama del repositorio GitHub a usar"
+  type        = string
+  default     = "sagemaker_exp"
+}
+
+variable "github_oauth_token" {
+  description = "Token de OAuth de GitHub para acceso al repositorio"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "enable_codebuild" {
+  description = "Habilitar CodeBuild en lugar de local-exec"
+  type        = bool
+  default     = true
+}
+
+variable "docker_local_build" {
+  description = "Construir Docker localmente (false cuando se usa CodeBuild)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_docker_push" {
+  description = "Hacer push de la imagen Docker a ECR"
+  type        = bool
+  default     = false
+}
+
 variable "ecr_image_tag_mutability" {
   description = "ECR image tag mutability"
   type        = string
@@ -78,16 +115,10 @@ variable "tags" {
   }
 }
 
-variable "enable_docker_push" {
-  description = "Ejecutar push a ECR automáticamente"
-  type        = bool
-  default     = true
-}
-
-variable "docker_local_build" {
-  description = "Build Docker localmente"
-  type        = bool
-  default     = true
+variable "codebuild_compute_type" {
+  description = "Tipo de instancia para CodeBuild"
+  type        = string
+  default     = "BUILD_GENERAL1_SMALL"
 }
 
 variable "endpoint_name_suffix" {

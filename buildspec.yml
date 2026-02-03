@@ -1,0 +1,47 @@
+version: 0.2
+
+# ============================================================
+# BuildSpec para construir imagen Docker con CodeBuild
+# ============================================================
+# Este archivo debe estar en la raíz del repositorio
+# https://github.com/camiloestradaguerra/Fraudes_diners-1
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - REPOSITORY_NAME="fraud-detection-api"
+      - IMAGE_REPO_NAME=$REPOSITORY_NAME
+      - IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:0:7}
+      - IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - echo "Image URI=$IMAGE_URI"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $IMAGE_URI -f Dockerfile .
+      - echo "Docker image built successfully"
+
+  post_build:
+    commands:
+      - echo "Pushing image to ECR..."
+      - docker push $IMAGE_URI
+      - echo "Image pushed to ECR"
+      - echo "Writing image definitions file..."
+      - printf '[{"name":"fraud-detection-api","imageUri":"%s"}]' $IMAGE_URI > imagedefinitions.json
+      - cat imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
+  name: BuildArtifact
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+
+env:
+  variables:
+    AWS_REGION: us-east-1
+    AWS_ACCOUNT_ID: 761951921633

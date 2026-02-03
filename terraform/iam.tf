@@ -98,3 +98,84 @@ data "aws_iam_policy_document" "apigateway_invoke" {
     resources = ["*"]
   }
 }
+
+# ============================================================
+# IAM Role: AWS CodeBuild
+# ============================================================
+
+resource "aws_iam_role" "codebuild_role" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name               = "${var.project_name}-codebuild-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.codebuild_trust[0].json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "codebuild_trust" {
+  count = var.enable_codebuild ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["codebuild.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role_policy" "codebuild_ecr" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name   = "${var.project_name}-codebuild-ecr-${var.environment}"
+  role   = aws_iam_role.codebuild_role[0].id
+  policy = data.aws_iam_policy_document.codebuild_ecr[0].json
+}
+
+data "aws_iam_policy_document" "codebuild_ecr" {
+  count = var.enable_codebuild ? 1 : 0
+
+  statement {
+    sid    = "ECRPushImage"
+    effect = "Allow"
+    actions = [
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:PutImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload"
+    ]
+    resources = [aws_ecr_repository.fraud_detection.arn]
+  }
+
+  statement {
+    sid    = "ECRAuthToken"
+    effect = "Allow"
+    actions = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "codebuild_logs" {
+  count = var.enable_codebuild ? 1 : 0
+
+  name   = "${var.project_name}-codebuild-logs-${var.environment}"
+  role   = aws_iam_role.codebuild_role[0].id
+  policy = data.aws_iam_policy_document.codebuild_logs[0].json
+}
+
+data "aws_iam_policy_document" "codebuild_logs" {
+  count = var.enable_codebuild ? 1 : 0
+
+  statement {
+    sid    = "CloudWatchLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${var.project_name}-docker-build-${var.environment}*"]
+  }
+}
