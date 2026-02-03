@@ -89,3 +89,15 @@ variable "docker_local_build" {
   type        = bool
   default     = true
 }
+
+variable "endpoint_name_suffix" {
+  description = "Sufijo para el nombre del endpoint SageMaker (ej: Diners)"
+  type        = string
+  default     = "Diners"
+}
+
+variable "api_gateway_name_suffix" {
+  description = "Sufijo para el nombre de API Gateway"
+  type        = string
+  default     = "API"
+}

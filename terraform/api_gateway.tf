@@ -33,7 +33,7 @@ resource "aws_api_gateway_integration" "fraude_sagemaker" {
   http_method             = aws_api_gateway_method.fraude_post.http_method
   type                    = "AWS"
   integration_http_method = "POST"
-  uri                     = "arn:aws:apigateway:${var.aws_region}:runtime.sagemaker:path/endpoints/endpoint-fraudes-v5/invocations"
+  uri                     = "arn:aws:apigateway:${var.aws_region}:runtime.sagemaker:path/endpoints/${aws_sagemaker_endpoint.fraud_detection.name}/invocations"
   credentials             = aws_iam_role.apigateway_sagemaker.arn
 }
 

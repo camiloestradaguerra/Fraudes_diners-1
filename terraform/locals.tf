@@ -14,10 +14,10 @@ locals {
   sagemaker_model_name       = "${var.project_name}-model-${var.environment}"
   sagemaker_endpoint_config  = "${var.project_name}-config-${var.environment}"
   
-  # Nombre exacto del endpoint para evitar conflictos
-  sagemaker_endpoint_name    = "endpoint-fraudes-v5"
+  # Endpoint name dinámico: "Fraudes-Diners-Prod-Endpoint"
+  sagemaker_endpoint_name    = "${title(var.project_name)}-${var.endpoint_name_suffix}-${title(var.environment)}-Endpoint"
   
-  api_gateway_name = "${var.project_name}-api-${var.environment}"
+  api_gateway_name = "${var.project_name}-${var.api_gateway_name_suffix}-${var.environment}"
   
   iam_role_sagemaker_name     = "sagemaker-execution-${var.project_name}-${var.environment}"
   iam_role_apigateway_name    = "apigateway-sagemaker-${var.project_name}-${var.environment}"
