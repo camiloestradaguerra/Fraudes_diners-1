@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'API Gateway para Fraudes Diners - Stack Completo (IAM + API Gateway + SageMaker Integration)'
+
+Parameters:
+  EndpointName:
+    Type: String
+    Default: endpoint-fraudes-v5
+    Description: Nombre del endpoint SageMaker existente
+    AllowedPattern: '^[a-zA-Z0-9\-]{1,63}$'
+    ConstraintDescription: Debe ser un nombre válido de SageMaker endpoint
+
+Resources:
+
+  # ============================================================
+  # 1. IAM ROLE - API GATEWAY SAGEMAKER PROXY
+  # ============================================================
+  
+  APIGatewaySageMakerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'apigateway-sagemaker-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Description: Rol para que API Gateway invoque SageMaker endpoints
+      Tags:
+        - Key: Project
+          Value: fraudes-diners
+        - Key: Environment
+          Value: production
+
+  # ============================================================
+  # 2. IAM POLICY - SAGEMAKER INVOCATION
+  # ============================================================
+  
+  SageMakerInvokePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: SageMakerInvoke
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sagemaker:InvokeEndpoint'
+            Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${EndpointName}'
+      Roles:
+        - !Ref APIGatewaySageMakerRole
+
+  # ============================================================
+  # 3. API GATEWAY - CONFIGURACIÓN
+  # ============================================================
+  
+  FraudesRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: fraudes-api-prod
+      Description: API para detección de fraudes con SageMaker
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: production
+        - Key: Project
+          Value: fraudes-diners
+
+  # ============================================================
+  # 4. API GATEWAY - RECURSOS Y MÉTODOS
+  # ============================================================
+  
+  FraudeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref FraudesRestApi
+      ParentId: !GetAtt FraudesRestApi.RootResourceId
+      PathPart: fraude
+
+  PostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FraudesRestApi
+      ResourceId: !Ref FraudeResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:runtime.sagemaker:path/endpoints/${EndpointName}/invocations'
+        Credentials: !GetAtt APIGatewaySageMakerRole.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # ============================================================
+  # 5. API GATEWAY - DEPLOYMENT
+  # ============================================================
+  
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PostMethod
+    Properties:
+      RestApiId: !Ref FraudesRestApi
+      StageName: prod
+
+Outputs:
+  ApiId:
+    Description: API Gateway REST API ID
+    Value: !Ref FraudesRestApi
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiId'
+
+  ApiInvokeUrl:
+    Description: URL para invocar la API
+    Value: !Sub 'https://${FraudesRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/fraude'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiInvokeUrl'
+
+  RoleArn:
+    Description: ARN del rol IAM creado para API Gateway
+    Value: !GetAtt APIGatewaySageMakerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleArn'
+
+  RoleName:
+    Description: Nombre del rol IAM
+    Value: !Ref APIGatewaySageMakerRole
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleName'
+
+  EndpointName:
+    Description: Nombre del SageMaker Endpoint
+    Value: !Ref EndpointName
+    Export:
+      Name: !Sub '${AWS::StackName}-EndpointName'

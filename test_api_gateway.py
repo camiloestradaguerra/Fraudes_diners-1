@@ -5,9 +5,15 @@ Esto es equivalente a lo que harías en Postman
 """
 import requests
 import json
+from pathlib import Path
 
-# URL del API Gateway
-API_URL = "https://tooahxop09.execute-api.us-east-1.amazonaws.com/prod/fraude"
+# Leer URL del archivo api-invoke-url.txt
+try:
+    with open('api-invoke-url.txt', 'r') as f:
+        API_URL = f.read().strip()
+except FileNotFoundError:
+    # URL por defecto si no existe el archivo
+    API_URL = "https://dzxmpzm97k.execute-api.us-east-1.amazonaws.com/prod/fraude"
 
 # Datos de prueba
 payload = {

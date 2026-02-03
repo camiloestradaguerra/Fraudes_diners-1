@@ -1,0 +1,1 @@
+arn:aws:iam::761951921633:role/apigateway-sagemaker-proxy

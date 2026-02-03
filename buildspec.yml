@@ -1,0 +1,34 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Iniciando Docker build y push a ECR..."
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fraud-detection-api
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - echo "Repository URI: $REPOSITORY_URI"
+      - echo "Image Tag: $IMAGE_TAG"
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - REPOSITORY_NAME=fraud-detection-api
+      - aws ecr describe-repositories --repository-names $REPOSITORY_NAME --region $AWS_DEFAULT_REGION || aws ecr create-repository --repository-name $REPOSITORY_NAME --region $AWS_DEFAULT_REGION
+
+  build:
+    commands:
+      - echo "Construyendo imagen Docker..."
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
+
+  post_build:
+    commands:
+      - echo "Pusheando imagen a ECR..."
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:latest
+      - echo "Escribiendo image definitions file..."
+      - printf '[{"name":"fraud-detection-api","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo "Image push completado"
+
+artifacts:
+  files:
+    - imagedefinitions.json
+  name: BuildArtifact

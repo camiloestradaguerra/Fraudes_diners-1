@@ -1,0 +1,173 @@
+# ============================================================
+# .dockerignore - Excluir archivos innecesarios de la imagen
+# ============================================================
+# Esto reduce el tamaño de la imagen Docker de 2.9 GB a ~2.4 GB
+
+# ============================================================
+# 1. Métodos de despliegue abandonados
+# ============================================================
+.ebextensions/
+.elasticbeanstalk/
+cloudformation/
+terraform/
+
+# ============================================================
+# 2. Scripts fallidos
+# ============================================================
+configure_api_gateway.py
+create_api_gateway_final.py
+test_api_interactive.py
+leer_fraudes_local.py
+data_json.py
+test_s3_access.py
+
+# ============================================================
+# 3. Métodos alternativos (ECS/Fargate)
+# ============================================================
+deploy_ecs_final.ps1
+deploy_ecs_simple.ps1
+deploy_to_ecs.ps1
+deploy_to_ecs_now.ps1
+create_ecs_cluster.ps1
+ecs-task-execution-policy.json
+ecs-task-trust-policy.json
+service-config.json
+task_def.json
+task_definition_final.json
+task_definition_simple.json
+task_def_fargate_pro.json
+
+# ============================================================
+# 4. Scripts CodeBuild (no utilizados)
+# ============================================================
+codebuild.json
+codebuild_policy.json
+codebuild_project.json
+codebuild_trust.json
+
+# ============================================================
+# 5. Scripts PowerShell antiguos
+# ============================================================
+fix_api_gateway.ps1
+get_api_url.ps1
+setup_github_codebuild.ps1
+trigger_codebuild.ps1
+verify_policies.ps1
+configure_aws.sh
+
+# ============================================================
+# 6. Documentación de intentos fallidos
+# ============================================================
+API_GATEWAY_MANUAL_SETUP.md
+API_GATEWAY_READY.md
+API_GATEWAY_STATUS.md
+FIX_403_FORBIDDEN.md
+TROUBLESHOOT_403.md
+SUMMARY_403_FIX.md
+CODEBUILD_SETUP.md
+AWS_DEPLOYMENT_GUIDE.md
+MANUAL_DEPLOYMENT.md
+MIGRATION_SUMMARY.md
+OPTIONS_COMPARISON.md
+DEPLOYMENT_FILES_README.md
+
+# ============================================================
+# 7. Políticas IAM duplicadas
+# ============================================================
+assume-policy.json
+trust-policy-simple.json
+trust-policy-updated.json
+trust.json
+trust_policy.json
+sagemaker-policy.json
+sagemaker-trust-policy.json
+mapping-template.json
+
+# ============================================================
+# 8. Logs y archivos temporales
+# ============================================================
+creation_output.log
+test_result.log
+json_proof.json
+resultado.json
+v5_config.json
+role-arn.txt
+resource-id.txt
+api-id.txt
+api-invoke-url.txt
+final_api_url.txt
+
+# ============================================================
+# 9. Utilidades no necesarias en imagen
+# ============================================================
+ngrok.exe
+final_build.sh
+
+# ============================================================
+# 10. Archivos de desarrollo (no ejecutados en container)
+# ============================================================
+notebooks/
+.ipynb_checkpoints/
+*.ipynb
+*.jupyter
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# ============================================================
+# 11. Control de versiones (no necesario en runtime)
+# ============================================================
+.git/
+.gitignore
+.github/
+.gitattributes
+
+# ============================================================
+# 12. Documentación interna
+# ============================================================
+README.md
+LICENSE
+CLEANUP_SUMMARY.md
+SCRIPTS_DESPLIEGUE_RESUMEN.md
+DOCUMENTACION_TECNICA_*.md
+POSTMAN_GUIDE.md
+CLOUDFORMATION_GUIDE.md
+QUICKSTART.md
+INDEX.md
+KERNEL_SETUP.md
+
+# ============================================================
+# 13. Configuración local
+# ============================================================
+.venv/
+.env
+.env.local
+venv/
+env/
+
+# ============================================================
+# 14. Archivos de proyecto (no necesarios runtime)
+# ============================================================
+pyproject.toml
+uv.lock
+Fraudes_API_Postman_Collection.json
+deployment-config.json
+*.txt (excepto en endpoint_prototipo/)
+
+# ============================================================
+# 15. Build tools
+# ============================================================
+Makefile
+webpack.config.js
+tsconfig.json
+.editorconfig
+
+# ============================================================
+# MANTENER SOLAMENTE:
+# ============================================================
+# endpoint_prototipo/        ✅ Código de la API (CRÍTICO)
+# Dockerfile                 ✅ Definición de imagen
+# buildspec.yml              ✅ CodeBuild config
+# apigateway-*.json          ✅ Políticas IAM (producción)
+# variants.json              ✅ Config SageMaker

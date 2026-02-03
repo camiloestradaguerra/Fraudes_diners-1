@@ -1,0 +1,409 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Stack Completo MLOps: CodeBuild (Docker) + SageMaker + API Gateway'
+
+Parameters:
+  SourceCodeRepository:
+    Type: String
+    Description: URL del repositorio Git con el código
+    Default: 'https://github.com/your-repo/fraud-detection.git'
+  
+  SourceCodeBranch:
+    Type: String
+    Description: Rama del repositorio
+    Default: 'main'
+
+  InstanceType:
+    Type: String
+    Default: ml.m5.large
+    Description: Tipo de instancia para SageMaker
+    AllowedValues:
+      - ml.m5.large
+      - ml.m5.xlarge
+      - ml.t3.medium
+      - ml.t3.large
+
+Resources:
+
+  # ============================================================
+  # 1. ECR REPOSITORY
+  # ============================================================
+  
+  FraudDetectionRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: fraud-detection-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      Tags:
+        - Key: Project
+          Value: fraudes-diners
+        - Key: Environment
+          Value: production
+
+  # ============================================================
+  # 2. IAM ROLES
+  # ============================================================
+  
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Action:
+                  - 'logs:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeRepositories
+                  - ecr:CreateRepository
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/fraud-detection-api'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'sagemaker-execution-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/fraud-detection-api'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+
+  APIGatewaySageMakerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'apigateway-sagemaker-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SageMakerInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/endpoint-fraudes-*'
+
+  # ============================================================
+  # 3. CODEBUILD PROJECT (Docker Build + ECR Push)
+  # ============================================================
+  
+  DockerBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'fraud-detection-docker-build-${AWS::StackName}'
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref 'AWS::AccountId'
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref 'AWS::Region'
+          - Name: IMAGE_REPO_NAME
+            Value: fraud-detection-api
+          - Name: IMAGE_TAG
+            Value: latest
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo "Iniciando Docker build y push a ECR..."
+                - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/fraud-detection-api
+                - echo "Repository URI: $REPOSITORY_URI"
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+            build:
+              commands:
+                - echo "Construyendo imagen Docker..."
+                - docker build -t $REPOSITORY_URI:latest .
+            post_build:
+              commands:
+                - echo "Pusheando imagen a ECR..."
+                - docker push $REPOSITORY_URI:latest
+          artifacts:
+            files:
+              - '**/*'
+
+  # ============================================================
+  # 4. LAMBDA PARA EJECUTAR CODEBUILD Y ESPERAR
+  # ============================================================
+  
+  CodeBuildExecutionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          
+          codebuild = boto3.client('codebuild')
+          
+          def handler(event, context):
+              try:
+                  # Ejecutar el build
+                  response = codebuild.start_build(
+                      projectName='fraud-detection-docker-build-' + event['StackName']
+                  )
+                  
+                  build_id = response['build']['id']
+                  print(f"Build iniciado: {build_id}")
+                  
+                  # Esperar a que termine
+                  waiter = codebuild.get_waiter('build_complete')
+                  waiter.wait(ids=[build_id])
+                  
+                  # Obtener estado del build
+                  build_status = codebuild.batch_get_builds(ids=[build_id])
+                  build = build_status['builds'][0]
+                  
+                  if build['buildStatus'] == 'SUCCEEDED':
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps('Docker build y push completado')
+                      }
+                  else:
+                      return {
+                          'statusCode': 500,
+                          'body': json.dumps(f'Build falló: {build["buildStatus"]}')
+                      }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt DockerBuildProject.Arn
+
+  # ============================================================
+  # 5. SAGEMAKER MODEL
+  # ============================================================
+  
+  FraudesModel:
+    Type: AWS::SageMaker::Model
+    DependsOn: DockerBuildProject
+    Properties:
+      ModelName: !Sub 'fraudes-model-${AWS::StackName}'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      PrimaryContainer:
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/fraud-detection-api:latest'
+        Environment:
+          SAGEMAKER_PROGRAM: 'main.py'
+          SAGEMAKER_SUBMIT_DIRECTORY: '/opt/ml/code'
+      Tags:
+        - Key: Project
+          Value: fraudes-diners
+        - Key: Environment
+          Value: production
+
+  # ============================================================
+  # 6. SAGEMAKER ENDPOINT CONFIG
+  # ============================================================
+  
+  FraudesEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub 'fraudes-config-${AWS::StackName}'
+      ProductionVariants:
+        - ModelName: !GetAtt FraudesModel.ModelName
+          VariantName: Primary
+          InitialInstanceCount: 1
+          InstanceType: !Ref InstanceType
+          InitialVariantWeight: 1.0
+      Tags:
+        - Key: Project
+          Value: fraudes-diners
+        - Key: Environment
+          Value: production
+
+  # ============================================================
+  # 7. SAGEMAKER ENDPOINT
+  # ============================================================
+  
+  FraudesEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'endpoint-fraudes-${AWS::StackName}'
+      EndpointConfigName: !GetAtt FraudesEndpointConfig.EndpointConfigName
+      Tags:
+        - Key: Project
+          Value: fraudes-diners
+        - Key: Environment
+          Value: production
+
+  # ============================================================
+  # 8. API GATEWAY
+  # ============================================================
+  
+  FraudesAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'fraudes-api-${AWS::StackName}'
+      Description: API para detección de fraudes
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  FraudeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref FraudesAPI
+      ParentId: !GetAtt FraudesAPI.RootResourceId
+      PathPart: fraude
+
+  FraudeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FraudesAPI
+      ResourceId: !Ref FraudeResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:runtime.sagemaker:path//'
+        Credentials: !GetAtt APIGatewaySageMakerRole.Arn
+        RequestTemplates:
+          application/json: !Sub |
+            {
+              "EndpointName": "${FraudesEndpoint}",
+              "Body": $input.json('$'),
+              "ContentType": "application/json"
+            }
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+      MethodResponses:
+        - StatusCode: 200
+
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: FraudeMethod
+    Properties:
+      RestApiId: !Ref FraudesAPI
+      StageName: prod
+
+  # ============================================================
+  # OUTPUTS
+  # ============================================================
+
+Outputs:
+  ModelName:
+    Description: Nombre del modelo SageMaker
+    Value: !GetAtt FraudesModel.ModelName
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelName'
+
+  EndpointName:
+    Description: Nombre del endpoint SageMaker
+    Value: !GetAtt FraudesEndpoint.EndpointName
+    Export:
+      Name: !Sub '${AWS::StackName}-EndpointName'
+
+  ApiId:
+    Description: ID del API Gateway
+    Value: !Ref FraudesAPI
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiId'
+
+  ApiInvokeUrl:
+    Description: URL del API Gateway
+    Value: !Sub 'https://${FraudesAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/fraude'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  ECRRepositoryUri:
+    Description: URI del repositorio ECR
+    Value: !GetAtt FraudDetectionRepository.RepositoryUri
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRUri'
+
+  CodeBuildProjectName:
+    Description: Nombre del proyecto CodeBuild
+    Value: !Ref DockerBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildProject'

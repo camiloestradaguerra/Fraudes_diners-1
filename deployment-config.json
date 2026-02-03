@@ -1,0 +1,8 @@
+{
+  "ModelName": "fraudes-model-fraudes-test-inteligente",
+  "EndpointName": "endpoint-fraudes-fraudes-test-inteligente",
+  "ApiInvokeUrl": "https://xstyd0jbbb.execute-api.us-east-1.amazonaws.com/prod/fraude",
+  "APIGatewayRoleName": "apigateway-sagemaker-fraudes-test-inteligente",
+  "ApiId": "xstyd0jbbb",
+  "APIGatewayRoleArn": "arn:aws:iam::761951921633:role/apigateway-sagemaker-fraudes-test-inteligente"
+}

@@ -3,7 +3,7 @@
     "Statement":  [
                       {
                           "Effect":  "Allow",
-                          "Resource":  "arn:aws:sagemaker:us-east-1:822626720556:endpoint/endpoint-fraudes-v5",
+                          "Resource":  "arn:aws:sagemaker:us-east-1:761951921633:endpoint/endpoint-fraudes-v5",
                           "Action":  [
                                          "sagemaker:InvokeEndpoint"
                                      ]
