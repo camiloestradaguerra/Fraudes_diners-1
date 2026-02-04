@@ -1,30 +1,26 @@
 ﻿version: 0.2
+
 phases:
   pre_build:
     commands:
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - IMAGE_REPO_NAME=$DOCKER_IMAGE_NAME
-      - IMAGE_TAG=$DOCKER_IMAGE_TAG
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-      - IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
-      - IMAGE_URI_COMMIT=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$COMMIT_HASH
-      - echo "Image URI (latest)=$IMAGE_URI"
-      - echo "Image URI (commit)=$IMAGE_URI_COMMIT"
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$DOCKER_IMAGE_NAME
   build:
     commands:
       - echo "Building Docker image..."
-      - docker build -t $IMAGE_URI -t $IMAGE_URI_COMMIT -f Dockerfile .
-      - echo "Docker image built successfully with tags: latest and $COMMIT_HASH"
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$COMMIT_HASH
   post_build:
     commands:
-      - echo "Pushing image to ECR..."
-      - docker push $IMAGE_URI
-      - docker push $IMAGE_URI_COMMIT
-      - echo "Image pushed to ECR with both tags"
+      - echo "Pushing images to ECR..."
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$COMMIT_HASH
       - echo "Writing image definitions file..."
-      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_IMAGE_NAME $IMAGE_URI > imagedefinitions.json
+      - printf '[{"name":"%s","imageUri":"%s"}]' "$DOCKER_IMAGE_NAME" "$REPOSITORY_URI:latest" > imagedefinitions.json
       - cat imagedefinitions.json
+
 artifacts:
   files:
     - imagedefinitions.json
@@ -32,4 +28,3 @@ artifacts:
 cache:
   paths:
     - '/root/.cache/pip/**/*'
-
