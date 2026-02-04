@@ -3,7 +3,7 @@
 # SageMaker Endpoint Configuration
 resource "aws_sagemaker_endpoint_configuration" "fraudes" {
   count           = var.create_sagemaker_endpoint ? 1 : 0
-  name            = "${local.sagemaker_endpoint_config}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  name            = local.sagemaker_endpoint_config
 
   production_variants {
     variant_name           = "Primary"

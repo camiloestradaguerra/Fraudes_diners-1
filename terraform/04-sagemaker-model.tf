@@ -25,7 +25,7 @@ resource "aws_s3_bucket_versioning" "sagemaker_artifacts" {
 # SageMaker Model
 resource "aws_sagemaker_model" "fraudes" {
   count           = var.create_sagemaker ? 1 : 0
-  name            = "fraudes-model-${var.environment}-${formatdate("YYYY-MM-DD", timestamp())}"
+  name            = "fraudes-model-${var.environment}"
   execution_role_arn = aws_iam_role.sagemaker_role[0].arn
 
   primary_container {
