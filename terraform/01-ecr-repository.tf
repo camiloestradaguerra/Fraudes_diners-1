@@ -51,8 +51,9 @@ resource "null_resource" "ecr_cleanup" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = "bash -c 'aws ecr batch-delete-image --repository-name ${self.triggers.repository_name} --image-ids $(aws ecr describe-images --repository-name ${self.triggers.repository_name} --query \"imageDetails[*].{imageTag:imageTags[0],imageDigest:imageDigest}\" --output text | awk \"{print \\\"imageDigest=\\\" \\$NF}\") 2>/dev/null || true'"
+    when       = destroy
+    command    = "powershell.exe -Command \"aws ecr delete-repository --repository-name fraud-detection-api --force --region us-east-1 2>$null; exit 0\""
+    on_failure = continue
   }
 
   depends_on = [aws_ecr_repository.fraud_detection]

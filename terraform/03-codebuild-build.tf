@@ -14,8 +14,8 @@ resource "null_resource" "trigger_codebuild" {
 
   # Trigger CodeBuild start-build via AWS CLI
   provisioner "local-exec" {
-    when    = create
-    command = "aws codebuild start-build --project-name ${aws_codebuild_project.docker_build[0].name} --region ${var.aws_region} --query 'build.id' --output text > codebuild_id.txt && timeout /t 1800 /nobreak"
-    on_failure = continue
+    when       = create
+    command    = "powershell.exe -Command \"$bid = (aws codebuild start-build --project-name ${aws_codebuild_project.docker_build[0].name} --region ${var.aws_region} --output json | ConvertFrom-Json).build.id; for($i=0; $i -lt 240; $i++) { $s = (aws codebuild batch-get-builds --ids $bid --region ${var.aws_region} --output json | ConvertFrom-Json).builds[0].buildStatus; Write-Host $s; if($s -in 'SUCCEEDED','FAILED','FAULT','STOPPED') { exit 0 }; Start-Sleep -Seconds 15 }\""
+    on_failure = fail
   }
 }
