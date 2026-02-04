@@ -26,9 +26,9 @@ resource "aws_ecr_repository" "fraud_detection" {
 
   tags = local.common_tags
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 # ============================================================
