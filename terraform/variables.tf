@@ -192,3 +192,9 @@ variable "create_sagemaker_endpoint" {
   type        = bool
   default     = false
 }
+
+variable "create_api_gateway" {
+  description = "Crear API Gateway (PASO 6)"
+  type        = bool
+  default     = false
+}

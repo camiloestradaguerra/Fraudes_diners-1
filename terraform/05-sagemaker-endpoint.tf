@@ -22,14 +22,19 @@ resource "aws_sagemaker_endpoint_configuration" "fraudes" {
     }
   )
 
+  lifecycle {
+    ignore_changes = [name]
+  }
+
   depends_on = [
     aws_sagemaker_model.fraudes
   ]
 }
 
 # SageMaker Endpoint
+# NOTA: El endpoint ya existe y está en servicio. Se maneja con lifecycle ignore_changes.
 resource "aws_sagemaker_endpoint" "fraudes" {
-  count                    = var.create_sagemaker_endpoint ? 1 : 0
+  count                    = 0  # Disabled: el endpoint ya existe en AWS
   name                     = local.sagemaker_endpoint_name
   endpoint_config_name     = aws_sagemaker_endpoint_configuration.fraudes[0].name
 
@@ -40,15 +45,18 @@ resource "aws_sagemaker_endpoint" "fraudes" {
       Type      = "Endpoint"
     }
   )
-
+  lifecycle {
+    ignore_changes = all
+  }
   depends_on = [
     aws_sagemaker_endpoint_configuration.fraudes
   ]
 }
 
 # CloudWatch Log Group for SageMaker Endpoint
+# NOTA: Este log group ya existe en AWS. Se deshabilita para evitar conflictos.
 resource "aws_cloudwatch_log_group" "sagemaker_endpoint" {
-  count             = var.create_sagemaker_endpoint ? 1 : 0
+  count             = 0  # Disabled: log group ya existe
   name              = "/aws/sagemaker/Endpoints/${local.sagemaker_endpoint_name}"
   retention_in_days = 30
 
@@ -59,4 +67,8 @@ resource "aws_cloudwatch_log_group" "sagemaker_endpoint" {
       Type      = "Endpoint"
     }
   )
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
