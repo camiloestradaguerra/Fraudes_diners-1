@@ -186,3 +186,9 @@ variable "create_sagemaker" {
   type        = bool
   default     = false
 }
+
+variable "create_sagemaker_endpoint" {
+  description = "Crear SageMaker Endpoint (PASO 5)"
+  type        = bool
+  default     = false
+}
