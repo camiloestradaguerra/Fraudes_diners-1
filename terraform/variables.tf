@@ -180,3 +180,9 @@ variable "ecr_image_exists" {
   type        = bool
   default     = true
 }
+
+variable "create_sagemaker" {
+  description = "Crear recursos de SageMaker (PASO 4)"
+  type        = bool
+  default     = false
+}
