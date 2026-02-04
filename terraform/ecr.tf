@@ -148,10 +148,6 @@ resource "aws_codebuild_project" "docker_build" {
   source_version = var.github_branch
 
   tags = local.common_tags
-
-  provisioner "local-exec" {
-    command = "powershell.exe -ExecutionPolicy Bypass -File ${path.module}/run_codebuild.ps1"
-  }
 }
 
 # ============================================================
