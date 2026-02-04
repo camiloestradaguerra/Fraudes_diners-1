@@ -88,6 +88,12 @@ variable "ecr_scan_on_push" {
   default     = true
 }
 
+variable "ecr_encryption_type" {
+  description = "ECR encryption type (AES256 or KMS)"
+  type        = string
+  default     = "AES256"
+}
+
 variable "sagemaker_instance_type" {
   description = "SageMaker endpoint instance type"
   type        = string
