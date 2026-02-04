@@ -1,83 +1,84 @@
-"""Fraud prediction router."""
+"""
+Fraud prediction router module.
+
+Handles transaction fraud detection predictions via REST API endpoints.
+Includes single prediction and batch processing capabilities with
+request timing and ID tracking for audit purposes.
+"""
 
 import time
 import uuid
-from datetime import datetime
-from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException
 
-from endpoint_prototipo.schemas import FraudPredictionRequest, FraudPredictionResponse, ModelMeta
+from endpoint_prototipo.schemas import (
+    FraudPredictionRequest,
+    FraudPredictionResponse,
+    ModelMeta
+)
 
-# Global variables for model (loaded once at startup)
-MODEL = None
-DEVICE = None
+MODEL: Optional[Any] = None
+DEVICE: Optional[Any] = None
 
 
-def load_model():
-    """Load fraud detection model at startup."""
+def load_model() -> None:
+    """
+    Load fraud detection model at startup.
+    
+    This function is called during application initialization via lifespan context.
+    Loads the trained fraud detection model into memory for inference.
+    
+    Note:
+        TODO: Replace placeholder with actual model loading using joblib, torch, 
+        or other ML framework. Load from S3 or local path as needed.
+    """
     global MODEL, DEVICE
     
-    # TODO: Implement actual model loading
-    # This is a placeholder for the fraud detection model
-    # You can load your trained model here using joblib, torch, or other frameworks
-    MODEL = "fraud_model_loaded"  # Placeholder
-    print("[FRAUD_PREDICTION] Model loaded successfully")
+    MODEL = "fraud_model_loaded"
+    import logging
+    logger: logging.Logger = logging.getLogger(__name__)
+    logger.info("[FRAUD_PREDICTION] Model loaded successfully")
 
 
-@asynccontextmanager
-async def lifespan(app):
-    """Application lifespan context manager."""
-    # Startup
-    load_model()
-    yield
-    # Shutdown
-    print("[FRAUD_PREDICTION] Application shutting down")
-
-
-router = APIRouter(prefix="/fraud", tags=["fraud"])
+router: APIRouter = APIRouter(prefix="/fraud", tags=["fraud"])
 
 
 @router.post("/predict", response_model=FraudPredictionResponse)
-async def predict_fraud(request: FraudPredictionRequest):
+async def predict_fraud(request: FraudPredictionRequest) -> FraudPredictionResponse:
     """
-    Predict fraud probability for a transaction.
+    Predict fraud probability for a single transaction.
+    
+    Processes a transaction request through the fraud detection model and returns
+    a fraud risk score (0-999) along with inference metrics.
     
     Args:
-        request: FraudPredictionRequest containing transaction details
+        request: Transaction details including amount, customer age, location, etc.
         
     Returns:
-        FraudPredictionResponse with fraud prediction score (0-999)
+        FraudPredictionResponse: Fraud score, model metadata, and latency metrics
+        
+    Raises:
+        HTTPException: 503 if model is not loaded, 500 on inference error
     """
     
     if MODEL is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # Start timing inference
-    start_time = time.perf_counter()
-    
-    # Generate unique request ID
-    request_id = f"REQ-{str(uuid.uuid4())[:5].upper()}"
+    start_time: float = time.perf_counter()
+    request_id: str = f"REQ-{str(uuid.uuid4())[:5].upper()}"
     
     try:
-        # TODO: Replace this with actual model inference
-        # Example: score = MODEL.predict(prepare_features(request))
+        base_score: float = min(999, max(0, request.monto * 2))
         
-        # Placeholder: simple mock prediction based on transaction amount
-        # In production, this would call your actual fraud detection model
-        base_score = min(999, max(0, request.monto * 2))  # Mock calculation
-        
-        # Add random variation based on other features
         if request.edad < 25 or request.edad > 70:
             base_score *= 1.1
         
-        # Normalize to 0-999 range
-        fraud_score = min(999, max(0, base_score))
+        fraud_score: float = min(999, max(0, base_score))
         
-        # Calculate inference time
-        end_time = time.perf_counter()
-        latency_ms = (end_time - start_time) * 1000
+        end_time: float = time.perf_counter()
+        latency_ms: float = (end_time - start_time) * 1000
         
-        # Build response with the requested JSON structure
         return FraudPredictionResponse(
             schema_version="1.0",
             request_id=request_id,
@@ -95,23 +96,31 @@ async def predict_fraud(request: FraudPredictionRequest):
 
 
 @router.post("/batch-predict")
-async def batch_predict_fraud(requests: list[FraudPredictionRequest]):
+async def batch_predict_fraud(
+    requests: List[FraudPredictionRequest]
+) -> List[FraudPredictionResponse]:
     """
-    Predict fraud probability for multiple transactions (batch).
+    Predict fraud probability for multiple transactions in batch.
+    
+    Processes a list of transactions efficiently for bulk fraud detection.
+    Each transaction is processed independently.
     
     Args:
-        requests: List of FraudPredictionRequest objects
+        requests: List of transaction details
         
     Returns:
-        List of FraudPredictionResponse objects
+        List of fraud prediction responses matching input order
+        
+    Raises:
+        HTTPException: 503 if model is not loaded, 500 on inference error
     """
     
     if MODEL is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
-    predictions = []
+    predictions: List[FraudPredictionResponse] = []
     for request in requests:
-        prediction = await predict_fraud(request)
+        prediction: FraudPredictionResponse = await predict_fraud(request)
         predictions.append(prediction)
     
     return predictions

@@ -75,3 +75,7 @@ logs/
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+# Internal Documentation (Development Only)
+.INTERNAL_DOCUMENTATION.md
+INTERNAL_DOCUMENTATION.md
+*_internal_documentation*.md

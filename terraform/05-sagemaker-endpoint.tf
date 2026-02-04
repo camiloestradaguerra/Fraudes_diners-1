@@ -32,9 +32,8 @@ resource "aws_sagemaker_endpoint_configuration" "fraudes" {
 }
 
 # SageMaker Endpoint
-# NOTA: El endpoint ya existe y está en servicio. Se maneja con lifecycle ignore_changes.
 resource "aws_sagemaker_endpoint" "fraudes" {
-  count                    = 0  # Disabled: el endpoint ya existe en AWS
+  count                    = var.create_sagemaker_endpoint ? 1 : 0
   name                     = local.sagemaker_endpoint_name
   endpoint_config_name     = aws_sagemaker_endpoint_configuration.fraudes[0].name
 

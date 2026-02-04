@@ -57,6 +57,9 @@ resource "aws_api_gateway_method" "predict" {
   request_models   = {
     "application/json" = "Empty"
   }
+  request_parameters = {
+    "method.request.header.Content-Type" = true
+  }
 }
 
 # API Gateway Integration: POST /predict -> SageMaker Endpoint
@@ -69,9 +72,9 @@ resource "aws_api_gateway_integration" "predict" {
   integration_http_method = "POST"
   uri                     = "arn:aws:apigateway:${var.aws_region}:runtime.sagemaker:path/endpoints/${local.sagemaker_endpoint_name}/invocations"
   credentials             = aws_iam_role.apigateway_role[0].arn
-
+  
   request_templates = {
-    "application/json" = "$input.json('$')"
+    "application/json" = "$input.body"
   }
 
   depends_on = [
@@ -86,15 +89,6 @@ resource "aws_api_gateway_integration_response" "predict" {
   resource_id     = aws_api_gateway_resource.predict[0].id
   http_method     = aws_api_gateway_method.predict[0].http_method
   status_code     = "200"
-  
-  response_templates = {
-    "application/json" = <<EOF
-#set($inputRoot = $input.path('$'))
-{
-  "prediction": "$inputRoot"
-}
-EOF
-  }
 
   depends_on = [
     aws_api_gateway_integration.predict
@@ -111,6 +105,13 @@ resource "aws_api_gateway_method_response" "predict" {
 
   response_models = {
     "application/json" = "Empty"
+  }
+
+  response_parameters = {
+    "method.response.header.Content-Type" = true
+    "method.response.header.Access-Control-Allow-Origin" = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
   }
 }
 

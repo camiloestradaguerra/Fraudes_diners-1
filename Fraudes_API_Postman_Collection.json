@@ -22,10 +22,10 @@
           "raw": "{\n    \"transaction_id\": \"TRX123456\",\n    \"monto\": 150.50,\n    \"edad\": 35,\n    \"ciudad\": \"Quito\",\n    \"establecimiento\": \"RestaurantXYZ\",\n    \"especialidad\": \"RESTAURANTES\"\n}"
         },
         "url": {
-          "raw": "https://tooahxop09.execute-api.us-east-1.amazonaws.com/prod/fraude",
+          "raw": "https://hlpvt2f9a9.execute-api.us-east-1.amazonaws.com/prod/predict",
           "protocol": "https",
           "host": [
-            "tooahxop09",
+            "hlpvt2f9a9",
             "execute-api",
             "us-east-1",
             "amazonaws",
@@ -33,7 +33,7 @@
           ],
           "path": [
             "prod",
-            "fraude"
+            "predict"
           ]
         },
         "description": "Envía una transacción para detectar fraude"
@@ -56,10 +56,10 @@
           "raw": "{\n    \"transaction_id\": \"TRX999999\",\n    \"monto\": 5000.00,\n    \"edad\": 45,\n    \"ciudad\": \"New York\",\n    \"establecimiento\": \"Luxury Hotel\",\n    \"especialidad\": \"HOTELES\"\n}"
         },
         "url": {
-          "raw": "https://tooahxop09.execute-api.us-east-1.amazonaws.com/prod/fraude",
+          "raw": "https://hlpvt2f9a9.execute-api.us-east-1.amazonaws.com/prod/predict",
           "protocol": "https",
           "host": [
-            "tooahxop09",
+            "hlpvt2f9a9",
             "execute-api",
             "us-east-1",
             "amazonaws",
@@ -67,7 +67,7 @@
           ],
           "path": [
             "prod",
-            "fraude"
+            "predict"
           ]
         },
         "description": "Test con transacción de monto alto"
@@ -90,10 +90,10 @@
           "raw": "{\n    \"transaction_id\": \"TRX111111\",\n    \"monto\": 2500.00,\n    \"edad\": 18,\n    \"ciudad\": \"Bogotá\",\n    \"establecimiento\": \"Casino\",\n    \"especialidad\": \"ENTRETENIMIENTO\"\n}"
         },
         "url": {
-          "raw": "https://tooahxop09.execute-api.us-east-1.amazonaws.com/prod/fraude",
+          "raw": "https://hlpvt2f9a9.execute-api.us-east-1.amazonaws.com/prod/predict",
           "protocol": "https",
           "host": [
-            "tooahxop09",
+            "hlpvt2f9a9",
             "execute-api",
             "us-east-1",
             "amazonaws",
@@ -101,7 +101,7 @@
           ],
           "path": [
             "prod",
-            "fraude"
+            "predict"
           ]
         },
         "description": "Test con usuario joven"

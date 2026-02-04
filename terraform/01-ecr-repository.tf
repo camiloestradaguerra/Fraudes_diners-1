@@ -15,6 +15,7 @@
 resource "aws_ecr_repository" "fraud_detection" {
   name                 = var.docker_image_name
   image_tag_mutability = var.ecr_image_tag_mutability
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = var.ecr_scan_on_push
@@ -38,4 +39,21 @@ resource "aws_ecr_repository" "fraud_detection" {
 locals {
   ecr_repository_arn = aws_ecr_repository.fraud_detection.arn
   ecr_repository_name = aws_ecr_repository.fraud_detection.name
+}
+
+# ============================================================
+# Null Resource: Limpiar imágenes del ECR antes de destruir
+# ============================================================
+
+resource "null_resource" "ecr_cleanup" {
+  triggers = {
+    repository_name = aws_ecr_repository.fraud_detection.name
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "bash -c 'aws ecr batch-delete-image --repository-name ${self.triggers.repository_name} --image-ids $(aws ecr describe-images --repository-name ${self.triggers.repository_name} --query \"imageDetails[*].{imageTag:imageTags[0],imageDigest:imageDigest}\" --output text | awk \"{print \\\"imageDigest=\\\" \\$NF}\") 2>/dev/null || true'"
+  }
+
+  depends_on = [aws_ecr_repository.fraud_detection]
 }
