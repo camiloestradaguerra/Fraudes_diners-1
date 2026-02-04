@@ -1,14 +1,4 @@
-version: 0.2
-
-# ============================================================
-# BuildSpec para construir imagen Docker con CodeBuild
-# ============================================================
-# Variables de entorno inyectadas por Terraform:
-# - AWS_REGION
-# - AWS_ACCOUNT_ID
-# - DOCKER_IMAGE_NAME
-# - DOCKER_IMAGE_TAG
-
+﻿version: 0.2
 phases:
   pre_build:
     commands:
@@ -21,13 +11,11 @@ phases:
       - IMAGE_URI_COMMIT=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$COMMIT_HASH
       - echo "Image URI (latest)=$IMAGE_URI"
       - echo "Image URI (commit)=$IMAGE_URI_COMMIT"
-
   build:
     commands:
       - echo "Building Docker image..."
       - docker build -t $IMAGE_URI -t $IMAGE_URI_COMMIT -f Dockerfile .
       - echo "Docker image built successfully with tags: latest and $COMMIT_HASH"
-
   post_build:
     commands:
       - echo "Pushing image to ECR..."
@@ -37,12 +25,11 @@ phases:
       - echo "Writing image definitions file..."
       - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_IMAGE_NAME $IMAGE_URI > imagedefinitions.json
       - cat imagedefinitions.json
-
 artifacts:
   files:
     - imagedefinitions.json
   name: BuildArtifact
-
 cache:
   paths:
     - '/root/.cache/pip/**/*'
+
