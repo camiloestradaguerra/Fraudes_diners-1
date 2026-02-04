@@ -4,60 +4,57 @@ param(
     [string]$Region = "us-east-1"
 )
 
-Write-Host "🚀 Iniciando CodeBuild para proyecto: $ProjectName"
+Write-Host "[CODEBUILD] Iniciando build para proyecto: $ProjectName"
 
 # Iniciar el build
-$buildStartResult = aws codebuild start-build `
-    --project-name $ProjectName `
-    --region $Region `
-    --query 'build.id' `
-    --output text
+$buildStartResult = aws codebuild start-build --project-name $ProjectName --region $Region --query 'build.id' --output text
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "❌ Error al iniciar CodeBuild"
+    Write-Host "[ERROR] No se pudo iniciar CodeBuild"
     exit 1
 }
 
 $buildId = $buildStartResult
-Write-Host "✓ Build iniciado: $buildId"
+Write-Host "[CODEBUILD] Build iniciado: $buildId"
 
-# Esperar a que se complete (máximo 30 minutos)
+# Esperar a que se complete (maximo 30 minutos)
 $maxWaitSeconds = 1800
 $startTime = Get-Date
 $completed = $false
+$loopCount = 0
 
 while ((Get-Date) -lt $startTime.AddSeconds($maxWaitSeconds)) {
-    # Obtener estado del build
-    $buildStatus = aws codebuild batch-get-builds `
-        --ids $buildId `
-        --region $Region `
-        --query 'builds[0].buildStatus' `
-        --output text
+    $loopCount = $loopCount + 1
     
-    Write-Host "Status: $buildStatus"
+    # Obtener estado del build
+    $buildStatus = aws codebuild batch-get-builds --ids $buildId --region $Region --query 'builds[0].buildStatus' --output text
+    
+    Write-Host "[CODEBUILD] Iteracion $loopCount - Status: $buildStatus"
     
     if ($buildStatus -eq "SUCCEEDED") {
-        Write-Host "✓ Build completado exitosamente!"
+        Write-Host "[CODEBUILD] Build completado exitosamente"
         $completed = $true
         break
     }
-    elseif ($buildStatus -eq "FAILED") {
-        Write-Error "❌ Build falló"
-        exit 1
-    }
-    elseif ($buildStatus -eq "FAULT") {
-        Write-Error "❌ Error en la infraestructura de CodeBuild"
+    
+    if ($buildStatus -eq "FAILED") {
+        Write-Host "[ERROR] Build fallo"
         exit 1
     }
     
-    # Esperar 10 segundos antes de la próxima verificación
+    if ($buildStatus -eq "FAULT") {
+        Write-Host "[ERROR] Error en infraestructura de CodeBuild"
+        exit 1
+    }
+    
+    # Esperar 10 segundos antes de la proxima verificacion
     Start-Sleep -Seconds 10
 }
 
 if (-not $completed) {
-    Write-Error "❌ Timeout esperando el build (> 30 minutos)"
+    Write-Host "[ERROR] Timeout esperando el build - mas de 30 minutos"
     exit 1
 }
 
-Write-Host "✓ CodeBuild completó satisfactoriamente"
+Write-Host "[CODEBUILD] Completado correctamente"
 exit 0
