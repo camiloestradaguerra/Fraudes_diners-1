@@ -138,3 +138,45 @@ variable "api_gateway_name_suffix" {
   type        = string
   default     = "API"
 }
+
+variable "codebuild_image" {
+  description = "Imagen de Docker para CodeBuild"
+  type        = string
+  default     = "aws/codebuild/standard:7.0"
+}
+
+variable "codebuild_privileged_mode" {
+  description = "Habilitar modo privilegiado en CodeBuild (necesario para Docker)"
+  type        = bool
+  default     = true
+}
+
+variable "codebuild_logs_retention_days" {
+  description = "Días de retención de logs de CodeBuild"
+  type        = number
+  default     = 7
+}
+
+variable "sagemaker_model_exists" {
+  description = "¿Existe modelo SageMaker? (false = crear uno)"
+  type        = bool
+  default     = false
+}
+
+variable "sagemaker_endpoint_exists" {
+  description = "¿Existe endpoint SageMaker? (false = crear uno)"
+  type        = bool
+  default     = false
+}
+
+variable "api_gateway_exists" {
+  description = "¿Existe API Gateway? (false = crear una)"
+  type        = bool
+  default     = false
+}
+
+variable "ecr_image_exists" {
+  description = "¿Existe imagen en ECR? Si false, CodeBuild construirá y pusheará la imagen"
+  type        = bool
+  default     = true
+}

@@ -3,17 +3,19 @@ version: 0.2
 # ============================================================
 # BuildSpec para construir imagen Docker con CodeBuild
 # ============================================================
-# Este archivo debe estar en la raíz del repositorio
-# https://github.com/camiloestradaguerra/Fraudes_diners-1
+# Variables de entorno inyectadas por Terraform:
+# - AWS_REGION
+# - AWS_ACCOUNT_ID
+# - DOCKER_IMAGE_NAME
+# - DOCKER_IMAGE_TAG
 
 phases:
   pre_build:
     commands:
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - REPOSITORY_NAME="fraud-detection-api"
-      - IMAGE_REPO_NAME=$REPOSITORY_NAME
-      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_REPO_NAME=$DOCKER_IMAGE_NAME
+      - IMAGE_TAG=$DOCKER_IMAGE_TAG
       - IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
       - echo "Image URI=$IMAGE_URI"
 
@@ -29,7 +31,7 @@ phases:
       - docker push $IMAGE_URI
       - echo "Image pushed to ECR"
       - echo "Writing image definitions file..."
-      - printf '[{"name":"fraud-detection-api","imageUri":"%s"}]' $IMAGE_URI > imagedefinitions.json
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_IMAGE_NAME $IMAGE_URI > imagedefinitions.json
       - cat imagedefinitions.json
 
 artifacts:
@@ -40,8 +42,3 @@ artifacts:
 cache:
   paths:
     - '/root/.cache/pip/**/*'
-
-env:
-  variables:
-    AWS_REGION: us-east-1
-    AWS_ACCOUNT_ID: 761951921633
