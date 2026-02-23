@@ -1,398 +1,368 @@
-# 📚 DOCUMENTACIÓN TÉCNICA - Fraudes Diners
+# 📚 DOCUMENTACIÓN TÉCNICA CONCISA - Fraudes Diners (CloudFormation Focus)
 
-**Versión:** 2024.11 | **Fecha:** Febrero 2026 | **Autor:** Data Science Team
+**Versión:** 2024.11 | **Fecha:** Febrero 2026 | **⭐ TODO CENTRADO EN CLOUDFORMATION**
 
 ---
 
 ## 📖 Tabla de Contenidos
 
-1. [Visión General](#1-visión-general)
-2. [Arquitectura del Sistema](#2-arquitectura-del-sistema)
-3. [Componentes Principales](#3-componentes-principales)
-4. [Stack Tecnológico](#4-stack-tecnológico)
-5. [Flujo de Una Predicción](#5-flujo-de-una-predicción)
-6. [API REST Endpoints](#6-api-rest-endpoints)
-7. [Infraestructura Cloud](#7-infraestructura-cloud)
-8. [Pipelines ML](#8-pipelines-ml)
-9. [Despliegue](#9-despliegue)
+1. [¿QUÉ ES CLOUDFORMATION?](#1-qué-es-cloudformation)
+2. [Arquitectura (con CloudFormation)](#2-arquitectura-con-cloudformation)
+3. [CloudFormation: 9 Recursos Creados](#3-cloudformation-9-recursos-creados)
+4. [Parámetros de CloudFormation](#4-parámetros-de-cloudformation)
+5. [Salidas (Outputs) de CloudFormation](#5-salidas-outputs-de-cloudformation)
+6. [Flujo: Cliente → API Gateway → SageMaker](#6-flujo-cliente--api-gateway--sagemaker)
+7. [Componentes FastAPI](#7-componentes-fastapi)
+8. [Endpoints API](#8-endpoints-api)
+9. [Deployment con CloudFormation](#9-deployment-con-cloudformation)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
-## 1. Visión General
+## 1. ¿QUÉ ES CLOUDFORMATION?
 
-### Propósito
-**Fraudes Diners** es un sistema de **detección de fraudes en tiempo real** que clasifica transacciones como fraudulentas o legítimas usando Machine Learning.
+**CloudFormation** es un servicio de AWS que automatiza la creación de infraestructura usando archivos YAML/JSON.
 
-### Requisitos Clave
-- ✅ Procesar transacciones en **<100ms** (P95: <150ms)
-- ✅ Puntuaciones de riesgo **0-999** (0=legítimo, 999=fraude)
-- ✅ **Auto-escalable** según carga
-- ✅ Auditabilidad completa (request ID únicos)
-- ✅ 99.9% uptime (máx 43 min downtime/mes)
+### Analogía Simple
 
-### Stack Principal
-| Componente | Tecnología |
-|-----------|-----------|
-| API | FastAPI 0.104.1 |
-| ML | scikit-learn / XGBoost / LightGBM |
-| Contenedor | Docker 24.0+ |
-| Orquestación | AWS SageMaker |
-| Infraestructura | CloudFormation (YAML) |
-| Logging | AWS CloudWatch |
-| Python | 3.11+ |
+```
+CloudFormation = "Receta de Cocina"
+├─ Ingredientes = Parámetros de entrada (ImageUri, InstanceType)
+├─ Pasos = Recursos a crear (IAM, SageMaker, API Gateway)
+└─ Resultado = Infraestructura completa lista para usar
+```
+
+### ¿POR QUÉ usamos CloudFormation?
+
+✅ **Automático:** Un comando crea 9 recursos AWS   
+✅ **Reproducible:** Mismo código = mismo resultado   
+✅ **Versionable:** En Git como cualquier código   
+✅ **Rápido:** Deploy en <10 minutos   
+✅ **Fácil de destruir:** Borra TODO con un comando   
 
 ---
 
-## 2. Arquitectura del Sistema
+## 2. ARQUITECTURA (con CloudFormation)
 
 ```
-┌─────────────────────────────────────────────────┐
-│          CLIENTE (Sistemas Diners)              │
-└────────────────┬────────────────────────────────┘
-                 │ HTTPS POST
-                 ▼
-┌─────────────────────────────────────────────────┐
-│   AWS API Gateway (/fraud/predict)              │
-│   https://{api-id}.execute-api.us-east-1...    │
-└────────────────┬────────────────────────────────┘
-                 │ Integration
-                 ▼
-┌─────────────────────────────────────────────────┐
-│   AWS SageMaker Endpoint                        │
-│   endpoint-fraudes-{stack} (ml.m5.large)       │
-└────────────────┬────────────────────────────────┘
-                 │ /invocations
-                 ▼
-┌─────────────────────────────────────────────────┐
-│   Docker Container (FastAPI)                    │
-│   Port 8080 → Fraud Detection Model            │
-├─────────────────────────────────────────────────┤
-│ • Health Checks (/health, /ping)               │
-│ • Fraud Predictions (/fraud/predict)           │
-│ • Batch Processing (/fraud/batch-predict)      │
-└────────────────┬────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────┐
-│   AWS CloudWatch (Logs & Metrics)              │
-└─────────────────────────────────────────────────┘
-```
-
-### Flujo de Componentes
-
-```
-Entrada de Cliente
-    ↓
-API Gateway (validación, rate-limiting)
-    ↓
-SageMaker Runtime (invoca endpoint)
-    ↓
-FastAPI Application
-    ├─ Validación con Pydantic
-    ├─ Carga de features
-    ├─ Predicción del modelo
-    ├─ Cálculo de latencia
-    └─ Generación de response
-        ↓
-    CloudWatch (registro de logs)
-        ↓
-    Respuesta al cliente
+┌─────────────────────────────────────────┐
+│ CloudFormation Template                 │
+│ (infra-sagemaker-complete.yaml)         │
+└────────────────┬────────────────────────┘
+                 │ aws cloudformation create-stack
+                 ↓
+        CloudFormation Engine
+        ├─→ Crea IAM Roles
+        ├─→ Crea SageMaker Model
+        ├─→ Crea SageMaker Endpoint
+        ├─→ Crea API Gateway REST API
+        ├─→ Crea API Gateway Resource (/fraude)
+        ├─→ Crea API Gateway Method (POST)
+        ├─→ Crea API Gateway Deployment
+        ├─→ Configura credenciales y permisos
+        └─→ Retorna Outputs (URL)
+                 ↓
+        Infraestructura en AWS:
+        ├─ SageMaker ejecutando tu modelo
+        ├─ API Gateway exponiendo https://abc.../prod/fraude
+        └─ Todo conectado automáticamente
 ```
 
 ---
 
-## 3. Componentes Principales
+## 3. CLOUDFORMATION: 9 RECURSOS CREADOS
 
-### 3.1 FastAPI Application (`endpoint_prototipo/main.py`)
+**Archivo:** `infra-sagemaker-complete.yaml`
 
-**Responsabilidades:**
-- Inicializar app Flask
-- Configurar CORS y middleware
-- Cargar modelo en startup (lifespan)
-- Registrar routers
+### Recurso 1: SageMakerExecutionRole (IAM)
 
-**Configuración base:**
-```python
-app = FastAPI(
-    title="Fraud Detection API",
-    version="2024.11",
-    lifespan=lifespan
-)
-
-# CORS (abierto en dev, restringir en producción)
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
+```yaml
+Propósito: Dar permisos a SageMaker
+Permite:
+  ✓ Descargar imagen Docker desde ECR
+  ✓ Escribir logs en CloudWatch
+  ✓ Acceder S3 si necesita
+Usa: SageMaker service
 ```
 
-**Endpoints especiales:**
-- `GET /` - Info API
-- `GET /ping` - SageMaker health
-- `POST /invocations` - SageMaker inference
-- `GET /docs` - Swagger UI
-- `GET /redoc` - ReDoc docs
+### Recurso 2: APIGatewaySageMakerRole (IAM)
 
-### 3.2 Pydantic Schemas (`endpoint_prototipo/schemas.py`)
-
-**Request:**
-```python
-class FraudPredictionRequest(BaseModel):
-    transaction_id: str              # ID transacción
-    monto: float (>0)               # Monto transacción
-    edad: int (18-120)              # Edad cliente
-    ciudad: str                      # Ciudad
-    establecimiento: str             # Comercio
-    especialidad: str                # Categoría
+```yaml
+Propósito: Dar permisos a API Gateway
+Permite:
+  ✓ Invocar SageMaker endpoint SOLO
+Usa: API Gateway service
 ```
 
-**Response:**
-```python
-class FraudPredictionResponse(BaseModel):
-    schema_version: str              # "1.0"
-    request_id: str                 # "REQ-XXXXX"
-    ml_score_0_999: float           # 0-999
-    model_meta: ModelMeta           # Metadata
-    latency_ms: float               # Tiempo inferencia
+### Recurso 3: SageMaker::Model
+
+```yaml
+Propósito: Definir el modelo
+Especifica:
+  - Name: fraudes-model-{stack}
+  - Image: {tu-imagen-ecr}
+  - Program: main.py
+  - Role: SageMakerExecutionRole
 ```
 
-### 3.3 Routers
+### Recurso 4: SageMaker::EndpointConfig
 
-**health.py:**
-```python
-GET /health/
-├─ Verificar modelo cargado
-├─ Status: healthy/degraded/unhealthy
-└─ Response: {status, model_loaded, version}
+```yaml
+Propósito: Configuración del endpoint (no ejecuta aún)
+Especifica:
+  - InstanceType: ml.m5.large (o parámetro)
+  - InitialInstanceCount: 1
+  - ModelName: fraudes-model
 ```
 
-**fraud_prediction.py:**
-```python
-POST /fraud/predict
-├─ Input: FraudPredictionRequest
-├─ Output: FraudPredictionResponse
-└─ Lógica: validar → predecir → retornar
+### Recurso 5: SageMaker::Endpoint
 
-POST /fraud/batch-predict
-├─ Input: List[FraudPredictionRequest]
-└─ Output: List[FraudPredictionResponse]
+```yaml
+Propósito: EJECUTAR el modelo en AWS
+Estados:
+  Creating →  (5-10 min)
+  → InService (listo para inferencia)
+URL Interna:
+  arn:aws:sagemaker:.../endpoint/endpoint-fraudes-prod
 ```
 
-### 3.4 Docker Container
+### Recurso 6: ApiGateway::RestApi
 
-**Multi-stage build:**
-- **Stage 1 (Builder):** Compila dependencias
-- **Stage 2 (Runtime):** Imagen opcional (~2.4 GB)
+```yaml
+Propósito: Crear API REST pública HTTPS
+Genera:
+  Name: fraudes-api-prod
+  Type: REGIONAL
+  URL: https://{api-id}.execute-api.us-east-1.amazonaws.com
+```
 
-**Features:**
-- Base: Python 3.11-slim
-- Pre-compila librerías (mejor performance)
-- 65% más pequeño que build simple
-- Expone puerto 8080
+### Recurso 7: ApiGateway::Resource
+
+```yaml
+Propósito: Crear ruta /fraude
+Path: GET https://.../prod/fraude
+```
+
+### Recurso 8: ApiGateway::Method
+
+```yaml
+Propósito: Conectar POST /fraude → SageMaker
+Configuración:
+  - HttpMethod: POST
+  - Uri: arn:aws:apigateway:region:runtime.sagemaker:path/endpoints/endpoint-fraudes-{stack}/invocations
+  - Credentials: APIGatewayRole.Arn
+  - Transforma requests/responses automáticamente
+```
+
+### Recurso 9: ApiGateway::Deployment
+
+```yaml
+Propósito: Publicar API en el stage "prod"
+Sin esto:  API existe pero no es accesible
+Con esto:  https://{api-id}.execute-api.../prod/fraude ES VIVA
+```
 
 ---
 
-## 4. Stack Tecnológico
+## 4. PARÁMETROS DE CLOUDFORMATION
 
-### Backend
-- **Framework:** FastAPI (async HTTP)
-- **Server:** Uvicorn (ASGI)
-- **Validation:** Pydantic v2
+Tu proporcionas cuando ejecutas el stack:
 
-### ML
-- **Preprocessing:** pandas, numpy
-- **Models:** scikit-learn, XGBoost, LightGBM
-- **Serialization:** joblib, pickle
+```bash
+aws cloudformation create-stack ... \
+  --parameters \
+    ParameterKey=ImageUri,ParameterValue=761951921633.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest \
+    ParameterKey=InstanceType,ParameterValue=ml.m5.large
+```
 
-### Infrastructure
-- **Containerization:** Docker
-- **Orchestration:** AWS SageMaker
-- **API Management:** AWS API Gateway
-- **IAM:** Role-Based Access Control
-
-### Observability
-- **Logs:** CloudWatch Logs
-- **Metrics:** CloudWatch Metrics
-- **Dashboards:** CloudWatch Dashboards
-- **Alerts:** SNS notifications
-
-### Data Science
-- **Versioning:** Git
-- **Dependencies:** uv (ultra-fast package manager)
-- **Notebooks:** Jupyter Lab
+| Parámetro | Ejemplo | Uso |
+|-----------|---------|-----|
+| `ImageUri` | `{ACCOUNT}.dkr.ecr.../fraud-api:latest` | ¿Cuál imagen Docker usar? |
+| `InstanceType` | `ml.m5.large` | ¿Qué máquina para SageMaker? |
 
 ---
 
-## 5. Flujo de Una Predicción
+## 5. SALIDAS (OUTPUTS) DE CLOUDFORMATION
 
-### Paso a Paso (7 pasos)
+Cuando el stack termina, CloudFormation retorna:
+
+```bash
+aws cloudformation describe-stacks --stack-name fraud-detection-prod \
+  --query 'Stacks[0].Outputs'
+```
+
+**Retorna:**
+
+```json
+[
+  {
+    "OutputKey": "ModelName",
+    "OutputValue": "fraudes-model-prod"
+  },
+  {
+    "OutputKey": "EndpointName",
+    "OutputValue": "endpoint-fraudes-prod"
+  },
+  {
+    "OutputKey": "ApiId",
+    "OutputValue": "abc123xyz"
+  },
+  {
+    "OutputKey": "ApiInvokeUrl",
+    "OutputValue": "https://abc123xyz.execute-api.us-east-1.amazonaws.com/prod/fraude"
+    ← ⭐ ESTA ES LA URL QUE USA TU CLIENTE
+  }
+]
+```
+
+---
+
+## 6. FLUJO: CLIENTE → API GATEWAY → SAGEMAKER
+
+### Paso a Paso (5 pasos)
 
 ```
-1. CLIENTE envía HTTP POST /fraud/predict
-   {"transaction_id":"TRX-001", "monto":150, ...}
-   
-2. API GATEWAY recibe
-   ├─ Valida headers
-   ├─ Aplica rate-limiting
-   └─ Enruta a SageMaker
-   
-3. SAGEMAKER invoca endpoint
-   └─ URI: /endpoints/endpoint-fraudes-xxx/invocations
-   
-4. DOCKER CONTAINER FastAPI
-   ├─ Pydantic valida input
-   ├─ Comienza timing
-   └─ Genera request_id único
-   
-5. MODELO PREDICE
-   ├─ Procesa features
-   ├─ Ejecuta model.predict()
-   └─ Obtiene score 0-999
-   
-6. FASTAPI retorna Response
+1. CLIENTE envía
+   POST https://abc123.execute-api.us-east-1.amazonaws.com/prod/fraude
    {
+     "transaction_id": "TRX-001",
+     "monto": 150,
+     "edad": 35,
+     "ciudad": "Quito",
+     "establecimiento": "Amazon",
+     "especialidad": "ECOMMERCE"
+   }
+        ↓
+2. API GATEWAY (creado por CloudFormation)
+   ├─ Valida CORS
+   ├─ Rate-limiting (si configurado)
+   └─ Invoca SageMaker endpoint
+        ↓
+3. SAGEMAKER ENDPOINT (recurso 5 de CloudFormation)
+   ├─ Ejecuta tu imagen Docker
+   ├─ URI: /endpoints/endpoint-fraudes-{stack}/invocations
+   └─ Usa credenciales APIGatewaySageMakerRole
+        ↓
+4. DOCKER CONTAINER (tu FastAPI)
+   ├─ main.py carga FastAPI
+   ├─ Pydantic valida input
+   ├─ Modelo predice
+   └─ Retorna JSON
+        ↓
+5. RESPUESTA vuelve al cliente
+   {
+     "schema_version": "1.0",
      "request_id": "REQ-A1B2C",
      "ml_score_0_999": 125,
-     "latency_ms": 45.23,
-     ...
+     "model_meta": {...},
+     "latency_ms": 45.23
    }
-   
-7. CLOUDWATCH registra logs
-   ├─ Request JSON
-   ├─ Response JSON
-   ├─ Latencia
-   └─ Status code
 ```
 
-### Transformación de Features (Actual - Mock)
+---
+
+## 7. COMPONENTES FASTAPI
+
+### Estructura
+
+```
+endpoint_prototipo/
+├── main.py
+│   ├── Inicializa FastAPI
+│   ├── Carga modelo en startup
+│   ├── Configura CORS
+│   └─ Registra routers
+│
+├── schemas.py
+│   ├── FraudPredictionRequest
+│   ├── FraudPredictionResponse
+│   └── HealthResponse
+│
+└── routers/
+    ├── health.py → GET /health/
+    ├── fraud_prediction.py → POST /fraud/predict
+    └──                    → POST /fraud/batch-predict
+```
+
+### Request Schema
 
 ```python
-# Cálculo simple de score
-base_score = min(999, max(0, request.monto * 2))
-
-# Ajustes por edad
-if request.edad < 25 or request.edad > 70:
-    base_score *= 1.1
-
-# Normalizar 0-999
-fraud_score = min(999, max(0, base_score))
-```
-
-**TODO:** Implementar features reales (log transform, encoding, normalization, etc)
-
----
-
-## 6. API REST Endpoints
-
-### Base URL
-```
-https://{api-id}.execute-api.us-east-1.amazonaws.com/prod
-```
-
-### 6.1 Health Check
-```http
-GET /health/
-```
-
-**Response (200):**
-```json
 {
-  "status": "healthy",
-  "model_loaded": true,
-  "version": "1.0.0"
+  "transaction_id": str,      # ID transacción
+  "monto": float (>0),       # Monto
+  "edad": int (18-120),      # Edad
+  "ciudad": str,             # Ciudad
+  "establecimiento": str,    # Comercio
+  "especialidad": str        # Categoría
 }
 ```
 
----
+### Response Schema
 
-### 6.2 Fraud Prediction (Single)
-```http
-POST /fraud/predict
-Content-Type: application/json
-
-{
-  "transaction_id": "TRX-001",
-  "monto": 250.50,
-  "edad": 35,
-  "ciudad": "Quito",
-  "establecimiento": "Amazon Pay",
-  "especialidad": "ECOMMERCE"
-}
-```
-
-**Response (200):**
-```json
+```python
 {
   "schema_version": "1.0",
-  "request_id": "REQ-A1B2C",
-  "ml_score_0_999": 125,
+  "request_id": "REQ-XXXXX",     # Para auditoria
+  "ml_score_0_999": 125,         # 0-999 (999=fraude)
   "model_meta": {
     "name": "fraud_model_prod",
     "version": "2024.11",
     "provider": "ExternalVendor"
   },
-  "latency_ms": 45.23
+  "latency_ms": 45.23            # Tiempo inferencia
 }
 ```
 
-**Score Interpretation:**
-- `0-100`: Legítimo ✅
-- `100-400`: Sospechoso ⚠️
-- `400-700`: Probable fraude 🚩
-- `700-999`: Muy probable fraude 🔴
-
 ---
 
-### 6.3 Fraud Prediction (Batch)
+## 8. ENDPOINTS API
+
+### Health Check
+```http
+GET /health/
+```
+Response: `{"status": "healthy", "model_loaded": true, "version": "1.0.0"}`
+
+### Single Prediction
+```http
+POST /fraud/predict
+Content-Type: application/json
+
+{JSON de request}
+```
+Response: `{JSON de response}`
+
+### Batch Prediction
 ```http
 POST /fraud/batch-predict
-[
-  {"transaction_id": "TRX-001", "monto": 150, ...},
-  {"transaction_id": "TRX-002", "monto": 75.50, ...}
-]
+[{JSON request}, {JSON request}, ...]
 ```
-
-**Response:** Array de FraudPredictionResponse
+Response: `[{JSON response}, {JSON response}, ...]`
 
 ---
 
-### Status Codes
-| Code | Significado |
-|------|-------------|
-| 200 | Predicción exitosa |
-| 422 | Validación de input falló |
-| 503 | Modelo no cargado |
-| 500 | Error interno |
+## 9. DEPLOYMENT CON CLOUDFORMATION
 
----
-
-## 7. Infraestructura Cloud
-
-### Archivo: `infra-sagemaker-complete.yaml`
-
-**Parámetros:**
-- `ImageUri`: URI imagen Docker en ECR
-- `InstanceType`: Tipo instancia SageMaker (default: `ml.m5.large`)
-
-**Recursos creados:**
-
-| Recurso | Descripción |
-|---------|------------|
-| **IAM Roles** | Permisos para SageMaker, API Gateway |
-| **ECR Repository** | Registro para imagen Docker |
-| **SageMaker Model** | Definición de modelo |
-| **SageMaker Endpoint** | Instancia ejecutando modelo |
-| **API Gateway** | REST endpoint público HTTPS |
-
-**Outputs:**
-```
-ModelName          → fraudes-model-{stack}
-EndpointName       → endpoint-fraudes-{stack}
-ApiInvokeUrl       → https://{id}.execute-api.../prod/fraude
-```
-
-### Deploy CloudFormation
+### Step 1: Preparar Imagen Docker
 
 ```bash
-# Create stack
+# Build
+docker build -t fraud-api:latest .
+
+# Tag para ECR
+docker tag fraud-api:latest {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
+
+# Login ECR
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com
+
+# Push
+docker push {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
+```
+
+### Step 2: Crear CloudFormation Stack
+
+```bash
 aws cloudformation create-stack \
   --stack-name fraud-detection-prod \
   --template-body file://infra-sagemaker-complete.yaml \
@@ -400,176 +370,73 @@ aws cloudformation create-stack \
     ParameterKey=ImageUri,ParameterValue={ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest \
     ParameterKey=InstanceType,ParameterValue=ml.m5.large \
   --capabilities CAPABILITY_NAMED_IAM
+```
 
-# Wait for creation
+### ¿QUÉ PASA?
+
+CloudFormation automáticamente:
+1. Valida el template YAML
+2. Crea 9 recursos en orden correcto (respetando dependencias)
+3. Espera a que cada recurso esté listo antes de crear el siguiente
+4. Si falla, rollback automático
+
+### Step 3: Esperar & Obtener URL
+
+```bash
+# Esperar a que termine
 aws cloudformation wait stack-create-complete --stack-name fraud-detection-prod
 
-# Get API URL
-aws cloudformation describe-stacks --stack-name fraud-detection-prod \
-  --query 'Stacks[0].Outputs'
+# Obtener URL
+API_URL=$(aws cloudformation describe-stacks \
+  --stack-name fraud-detection-prod \
+  --query 'Stacks[0].Outputs[?OutputKey==`ApiInvokeUrl`].OutputValue' \
+  --output text)
+
+echo $API_URL
+# Output: https://abc123.execute-api.us-east-1.amazonaws.com/prod/fraude
 ```
 
----
-
-## 8. Pipelines ML
-
-### Estructura de Pipelines
-
-```
-src/pipelines/
-├── 0-cleaning_data/       → Limpieza y validación
-├── 1-data_sampling/       → Muestreo estratificado
-├── 2-feature_engineering/ → Creación de features
-├── 3-training/            → Entrenamiento
-├── 4-evaluation/          → Evaluación de métricas
-└── 5-model_registry/      → Guardado de modelo
-```
-
-### Flujo Pipeline
-
-**Stage 0: Data Cleaning**
-- Input: `fraudes.csv` (datos crudos)
-- Output: `fraudes_clean.parquet`
-- Operaciones: nulls, duplicados, validación tipos
-
-**Stage 1-2: Feature Engineering**
-- Temporal: hora, día, fin de semana, mes
-- Monetarias: log(monto), categorización
-- Geográficas: encoding ciudad/país
-- Derivadas: avg/frequency por usuario
-
-**Stage 3-4: Training & Evaluation**
-- Modelos: LightGBM (recomendado)
-- Métricas: accuracy, precision, recall, F1, ROC-AUC
-- Output: `modelo_fraudes.pkl`
-
-**Stage 5: Model Registry**
-- Versionado del modelo
-- Metadata: accuracy, hyperparameters
-- Artefactos en S3/MLflow
-
-### Ejecución
+### Step 4: Testear
 
 ```bash
-# Ejecutar pipeline completo
-uv run python src/pipelines/0-cleaning_data/main.py
-uv run python src/pipelines/1-data_sampling/main.py
-# ... etc hasta stage 5
+curl -X POST $API_URL -H "Content-Type: application/json" \
+  -d '{
+    "transaction_id": "TEST-001",
+    "monto": 150,
+    "edad": 35,
+    "ciudad": "Quito",
+    "establecimiento": "Test",
+    "especialidad": "TEST"
+  }'
 ```
 
----
-
-## 9. Despliegue
-
-### Prerequisitos
+### Step 5: Actualizar Stack (si cambias algo)
 
 ```bash
-# 1. AWS CLI
-aws configure
-aws sts get-caller-identity  # Verificar
-
-# 2. Docker
-docker --version
-
-# 3. Git
-git --version
-```
-
-### Deploy Step-by-Step
-
-```bash
-# 1. Build Docker image
-docker build -t fraud-api:latest .
-docker tag fraud-api:latest {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
-
-# 2. Login ECR
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com
-
-# 3. Push image
-docker push {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
-
-# 4. Deploy CloudFormation
-aws cloudformation create-stack \
+aws cloudformation update-stack \
   --stack-name fraud-detection-prod \
   --template-body file://infra-sagemaker-complete.yaml \
-  --parameters ParameterKey=ImageUri,ParameterValue={ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest \
+  --parameters ParameterKey=InstanceType,ParameterValue=ml.m5.xlarge \
   --capabilities CAPABILITY_NAMED_IAM
-
-# 5. Wait & Test
-aws cloudformation wait stack-create-complete --stack-name fraud-detection-prod
-API_URL=$(aws cloudformation describe-stacks --stack-name fraud-detection-prod \
-  --query 'Stacks[0].Outputs[0].OutputValue' --output text)
-curl -X POST $API_URL -H "Content-Type: application/json" -d '{...}'
 ```
 
-### CI/CD Automático
+### Step 6: Eliminar Stack (borra TODO)
 
-**GitHub Actions** (`.github/workflows/deploy.yml`):
-1. Push a main → automáticamente:
-   - Build Docker image
-   - Push a ECR
-   - Update CloudFormation stack
-   - Espera a que esté "InService"
-
----
-
-## 10. Troubleshooting
-
-### Error: "Model not loaded" (503)
-
-**Causa:** Modelo no se cargó en startup
-
-**Solución:**
 ```bash
-# Ver logs
-aws logs tail /aws/sagemaker/Endpoints/endpoint-fraudes-xxx --follow
+aws cloudformation delete-stack --stack-name fraud-detection-prod
 
-# Describir endpoint
-aws sagemaker describe-endpoint --endpoint-name endpoint-fraudes-xxx
-
-# Redeploy
-aws cloudformation update-stack --stack-name fraud-detection-prod ...
+# Esperar
+aws cloudformation wait stack-delete-complete --stack-name fraud-detection-prod
 ```
 
 ---
 
-### Error: Timeout API (P95 > 200ms)
+## 10. TROUBLESHOOTING
 
-**Causa:** Instancia insuficiente o modelo pesado
+### CloudFormation Error: CREATE_FAILED
 
-**Solución:**
 ```bash
-# Scale up instancia
-aws cloudformation update-stack --stack-name fraud-detection-prod \
-  --parameters ParameterKey=InstanceType,ParameterValue=ml.m5.xlarge
-```
-
----
-
-### Error: 422 Unprocessable Entity
-
-**Causa:** Datos inválidos en request
-
-**Validar según esquema:**
-```json
-{
-  "transaction_id": "TRX-001",  ✅ string
-  "monto": 100,                 ✅ >0
-  "edad": 35,                   ✅ 18-120
-  "ciudad": "Quito",            ✅ string
-  "establecimiento": "...",     ✅ string
-  "especialidad": "..."         ✅ string
-}
-```
-
----
-
-### Error: CloudFormation Stack Failed
-
-**Debug:**
-```bash
-# Ver eventos fallidos
+# Ver eventos
 aws cloudformation describe-stack-events \
   --stack-name fraud-detection-prod \
   --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`]'
@@ -578,42 +445,25 @@ aws cloudformation describe-stack-events \
 # - ImageUri inválida (no existe en ECR)
 # - Permisos IAM insuficientes
 # - Cuota SageMaker excedida
-# - Region no soportada
 ```
 
----
+### Error: "Model not loaded" (503)
 
-## Monitoreo Básico
-
-### CloudWatch Logs
 ```bash
-# Ver logs en tiempo real
-aws logs tail /fraud-detection/production --follow
-
-# Filtrar por error
-aws logs filter-log-events --log-group-name /fraud-detection/production \
-  --filter-pattern "ERROR"
+# Ver logs del endpoint
+aws logs tail /aws/sagemaker/Endpoints/endpoint-fraudes-prod --follow
 ```
 
-### Métricas Clave
-- **Latencia:** P95 < 150ms
-- **Errores:** < 1%
-- **Throughput:** 1000+ TPS
+### API Timeout (P95 > 200ms)
 
----
-
-## 📝 Checklist Deployment
-
-- [ ] Imagen Docker construida
-- [ ] Imagen pusheada a ECR
-- [ ] CloudFormation template revisado
-- [ ] Stack creado exitosamente
-- [ ] Endpoint en "InService"
-- [ ] Health check retorna 200
-- [ ] Predicción test exitosa
-- [ ] Logs en CloudWatch visibles
+```bash
+# Scale up instancia
+aws cloudformation update-stack \
+  --stack-name fraud-detection-prod \
+  --parameters ParameterKey=InstanceType,ParameterValue=ml.m5.xlarge
+```
 
 ---
 
 **Status:** ✅ Production Ready  
-**Last Update:** Febrero 23, 2026
+**Last Update:** Febrero 2026

@@ -1,82 +1,258 @@
-# fraudes_diners
+# 🔍 Fraudes Diners - Detección de Fraudes con CloudFormation
 
-Modelos para detección de fraudes
+**Sistema ML en tiempo real para detección de fraudes en AWS usando CloudFormation.**
 
-## 🚀 Configuración del Proyecto
+---
 
-Este proyecto utiliza [uv](https://github.com/astral-sh/uv) para la gestión de dependencias y ambientes virtuales, una herramienta moderna y ultra-rápida para Python.
+## 🌟 ¿Qué es este Proyecto?
 
-### Instalación de uv
+Un **sistema completo de detección de fraudes** que:
+- ✅ Procesa transacciones en **<100ms** con ML
+- ✅ Usa **CloudFormation** para crear infraestructura automática en AWS
+- ✅ Implementa **API REST REST con API Gateway** y **SageMaker**
+- ✅ Incluye **pipelines completos** de limpieza, feature engineering y training
 
-Si aún no tienes `uv` instalado:
+### Diagrama de lo que CloudFormation Crea
 
+```
+Ejecutas:  aws cloudformation create-stack --template-body file://infra-sagemaker-complete.yaml
+                                                    ↓
+CloudFormation AUTOMÁTICAMENTE crea:
+┌─────────────────────────────────────────────┐
+│ 1. IAM Roles (permisos)                    │
+│ 2. SageMaker Model (definición)            │
+│ 3. SageMaker Endpoint (instancia)          │
+│ 4. API Gateway (API pública HTTPS)         │
+│ 5. Conecta todo automáticamente            │
+│ 6. Retorna URL para usar                   │
+└─────────────────────────────────────────────┘
+
+Resultado: API en producción en <5 minutos
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Local (Dev)
 ```bash
+# Setup
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-### Setup Inicial
-
-1. **Configurar el ambiente y instalar dependencias:**
-
-```bash
-./setup.sh
-```
-
-O manualmente:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
+git clone https://github.com/dinersclub/fraudes-diners.git
+cd fraudes-diners
 uv sync
-```
-
-2. **Activar el ambiente virtual:**
-
-```bash
 source .venv/bin/activate
+
+# Correr API
+python endpoint_prototipo/main.py
+curl http://localhost:8000/fraud/predict ...
 ```
 
-### 📦 Gestión de Dependencias
-
-#### Agregar una nueva dependencia:
+### 2. Docker (Test)
 ```bash
-uv add <nombre-paquete>
+docker build -t fraud-api:latest .
+docker run -p 8000:8000 fraud-api:latest
 ```
 
-Ejemplos:
+### 3. AWS CloudFormation (Producción) ⭐
 ```bash
+# 1. Build y push imagen a ECR
+docker build -t fraud-api:latest .
+docker tag ... {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
+docker push {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
+
+# 2. Deploy con CloudFormation
+aws cloudformation create-stack \
+  --stack-name fraud-detection-prod \
+  --template-body file://infra-sagemaker-complete.yaml \
+  --parameters ParameterKey=ImageUri,ParameterValue={ACCOUNT}.dkr.ecr...fraud-api:latest \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# 3. CloudFormation crea TODO automáticamente
+# 4. Obtener URL
+aws cloudformation describe-stacks --stack-name fraud-detection-prod \
+  --query 'Stacks[0].Outputs'
+
+# 5. Ya puedes predecir
+curl -X POST https://{api-url}/fraud/predict ...
+```
+
+---
+
+## 📦 Gestión de Dependencias (uv)
+
+```bash
+# Agregar
 uv add xgboost
-uv add lightgbm
-uv add mlflow
-```
 
-#### Agregar dependencias de desarrollo:
-```bash
+# Desarrollo
 uv add --dev pytest
-uv add --dev black
-```
 
-#### Remover una dependencia:
-```bash
-uv remove <nombre-paquete>
-```
+# Remover
+uv remove nombre-paquete
 
-#### Actualizar dependencias:
-```bash
+# Actualizar
 uv sync --upgrade
 ```
 
-### 🏃 Ejecutar Scripts
+---
 
-#### Con el ambiente activado:
+## 📂 Documentación
+
+| Documento | Contenido |
+|-----------|-----------|
+| **[TECHNICAL_DOCUMENTATION_CONCISE.md](TECHNICAL_DOCUMENTATION_CONCISE.md)** | ⭐ **10 páginas, foco CloudFormation** |
+| **[TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)** | 30 páginas, detalles completos |
+| **[README_COMPLETO.md](README_COMPLETO.md)** | README profesional extenso |
+
+---
+
+## 🎯 Flujo CloudFormation Explicado
+
+### Qué hace `infra-sagemaker-complete.yaml`:
+
+```yaml
+Template: infra-sagemaker-complete.yaml
+    ↓
+Inputs (parámetros):
+  - ImageUri: "tu-imagen-docker-en-ecr"
+  - InstanceType: "ml.m5.large" (configurable)
+    ↓
+CloudFormation CREA:
+  1. SageMakerExecutionRole
+     └─ Permisos: ECR, CloudWatch, S3
+  
+  2. APIGatewaySageMakerRole
+     └─ Permisos: invocar SageMaker
+  
+  3. SageMaker::Model (fraudes-model)
+     └─ Apunta a: tu imagen Docker
+  
+  4. SageMaker::EndpointConfig
+     └─ Configura: instancia, réplicas
+  
+  5. SageMaker::Endpoint (VIVO)
+     └─ Ejecuta: tu modelo en máquina
+  
+  6. ApiGateway::RestApi
+     └─ Crea: API HTTPS pública
+  
+  7. ApiGateway::Resource (/fraude)
+     └─ Path: /fraude
+  
+  8. ApiGateway::Method (POST)
+     └─ POST /fraude → SageMaker endpoint
+  
+  9. ApiGateway::Deployment
+     └─ Publica: en stage "prod"
+    ↓
+Outputs (lo que retorna):
+  - ApiInvokeUrl: https://abc.../prod/fraude ← USA ESTO
+  - EndpointName: endpoint-fraudes-prod
+  - ModelName: fraudes-model-prod
+```
+
+### Conexión Real
+
+```
+Cliente HTTP:
+POST https://abc123.execute-api.us-east-1.amazonaws.com/prod/fraude
+  {"transaction_id": "TRX-001", "monto": 150, ...}
+        ↓
+API Gateway (creada por CloudFormation)
+        ↓
+SageMaker Endpoint (creado por CloudFormation)
+        ↓
+Docker Container (ejecutando main.py)
+        ↓
+FastAPI → predice → retorna score
+        ↓
+Respuesta JSON al cliente
+```
+
+---
+
+## 🏗️ Estructura del Proyecto
+
+```
+fraudes_diners/
+├── 📄 infra-sagemaker-complete.yaml    ← CLOUDFORMATION (✨ PRINCIPAL)
+├── 🐳 Dockerfile                       ← Imagen Docker
+├── 📁 endpoint_prototipo/              ← API FastAPI
+│   ├── main.py
+│   ├── schemas.py
+│   └── routers/
+├── 📁 src/pipelines/                   ← ML Pipelines
+├── 📚 TECHNICAL_DOCUMENTATION_CONCISE.md
+├── 📚 TECHNICAL_DOCUMENTATION.md
+└── README.md (este archivo)
+```
+
+---
+
+## 🔧 Desarrollo Local
+
 ```bash
+# 1. Setup
 source .venv/bin/activate
-python src/pipelines/0-cleaning_data/main.py
+
+# 2. Ejecutar API
+uvicorn endpoint_prototipo.main:app --reload
+
+# 3. Testear
+curl http://localhost:8000/health/
+curl -X POST http://localhost:8000/fraud/predict ...
+
+# 4. Ver docs
+# Abre: http://localhost:8000/docs (Swagger)
 ```
 
-#### Sin activar el ambiente (usando uv run):
+---
+
+## ☁️ Despliegue en AWS
+
+Toda la infraestructura se crea automáticamente con CloudFormation:
+
 ```bash
-uv run python src/pipelines/0-cleaning_data/main.py
+# Step 1: Build Docker
+docker build -t fraud-api:latest .
+
+# Step 2: Push a ECR (registro Docker en AWS)
+docker push {ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/fraud-api:latest
+
+# Step 3: CloudFormation crea TODO
+aws cloudformation create-stack \
+  --stack-name fraud-detection-prod \
+  --template-body file://infra-sagemaker-complete.yaml \
+  --parameters ParameterKey=ImageUri,ParameterValue=... \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# ✨ CloudFormation automáticamente:
+#    - Crea IAM roles
+#    - Crea SageMaker model
+#    - Crea SageMaker endpoint
+#    - Crea API Gateway
+#    - Conecta todo
+#    - Retorna URL
+
+# Step 4: Usar
+curl -X POST https://{ApiInvokeUrl} ...
 ```
+
+---
+
+## 📖 Documentación Técnica
+
+### Para Entender CloudFormation
+→ **[TECHNICAL_DOCUMENTATION_CONCISE.md](TECHNICAL_DOCUMENTATION_CONCISE.md)** (10 páginas)
+
+### Para Detalles Completos
+→ **[TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)** (30 páginas)
+
+---
+
+**Status:** ✅ Production Ready  
+**Última actualización:** Febrero 2026
 
 ### 📓 Jupyter Notebooks
 

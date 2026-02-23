@@ -9,15 +9,16 @@
 ## 📖 Tabla de Contenidos
 
 1. [Visión General](#visión-general)
-2. [Arquitectura del Sistema](#arquitectura-del-sistema)
-3. [Componentes Técnicos](#componentes-técnicos)
-4. [Flujo de Datos](#flujo-de-datos)
-5. [API REST Specification](#api-rest-specification)
-6. [Infraestructura Cloud (CloudFormation)](#infraestructura-cloud-cloudformation)
-7. [Pipelines de Machine Learning](#pipelines-de-machine-learning)
-8. [Despliegue y CI/CD](#despliegue-y-cicd)
-9. [Monitoring y Logging](#monitoring-y-logging)
-10. [Troubleshooting](#troubleshooting)
+2. [⭐ CloudFormation: Core de la Infraestructura](#cloudformation-core)
+3. [Arquitectura del Sistema](#arquitectura-del-sistema)
+4. [Componentes Técnicos](#componentes-técnicos)
+5. [Flujo de Datos](#flujo-de-datos)
+6. [API REST Specification](#api-rest-specification)
+7. [Infraestructura Cloud (CloudFormation - 9 Recursos)](#infraestructura-cloud-cloudformation)
+8. [Pipelines de Machine Learning](#pipelines-de-machine-learning)
+9. [Despliegue y CI/CD](#despliegue-y-cicd)
+10. [Monitoring y Logging](#monitoring-y-logging)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -52,6 +53,79 @@
 - **Latencia P95:** <150ms
 - **Latencia P99:** <500ms
 - **Throughput:** 1000+ transacciones/segundo
+
+---
+
+## ⭐ CloudFormation: Core de la Infraestructura
+
+### ¿Qué es CloudFormation?
+
+**CloudFormation** es el corazón de este proyecto. Es una plantilla YAML que **automatiza completamente la creación de toda la infraestructura AWS**.
+
+### Archivo Principal: `infra-sagemaker-complete.yaml`
+
+```yaml
+CloudFormation Template (276 líneas)
+    │
+    + Parámetros (2): ImageUri, InstanceType
+    │
+    + Recursos (9 total):
+    │   ├─ SageMakerExecutionRole (IAM)
+    │   ├─ APIGatewaySageMakerRole (IAM)
+    │   ├─ SageMaker::Model
+    │   ├─ SageMaker::EndpointConfig
+    │   ├─ SageMaker::Endpoint ⭐ (el que ejecuta tu código)
+    │   ├─ ApiGateway::RestApi
+    │   ├─ ApiGateway::Resource
+    │   ├─ ApiGateway::Method
+    │   └─ ApiGateway::Deployment
+    │
+    + Outputs (4): URLs y nombres de recursos
+```
+
+### ¿Por qué CloudFormation?
+
+✅ **Reproducible:** Deploy consistente en cualquier AWS account  
+✅ **Automático:** 1 comando crea 9 recursos + conexiones  
+✅ **Versionable:** Control de cambios en Git  
+✅ **Rollback automático:** Si algo falla, revierte todo  
+✅ **Infraestructura como código:** No clics en consola AWS  
+
+### Flujo CloudFormation
+
+```
+1. Tu ejecutas:
+   aws cloudformation create-stack \
+     --template-body file://infra-sagemaker-complete.yaml \
+     --parameters ImageUri=..., InstanceType=...
+   
+2. CloudFormation Engine:
+   ├─ Valida YAML
+   ├─ Crea SageMakerExecutionRole
+   ├─ Crea APIGatewaySageMakerRole
+   ├─ Crea SageMaker Model
+   ├─ Crea SageMaker Endpoint Config
+   ├─ Crea SageMaker Endpoint (espera a que inicie)
+   ├─ Crea API Gateway REST API
+   ├─ Crea API Gateway Resource
+   ├─ Crea API Gateway Method
+   ├─ Crea API Gateway Deployment
+   ├─ Configura permisos IAM
+   └─ Retorna Outputs
+   
+3. Resultado final:
+   ✅ Tu API está VIVA en HTTPS
+   ✅ SageMaker ejecutando tu Docker
+   ✅ Todo conectado automáticamente
+   ✅ API URL listo para clientes
+   
+4. Tu recibes Output:
+   ApiInvokeUrl = https://abc123.execute-api.us-east-1.amazonaws.com/prod/fraude
+   
+5. Cliente usa:
+   POST https://abc123.execute-api.us-east-1.amazonaws.com/prod/fraude
+   Con datos de transacción → Predicción fraud score
+```
 
 ---
 
@@ -116,36 +190,49 @@
 ### Componentes Clave
 
 ```
-Infrastructure Layer (CloudFormation)
-├── AWS IAM Roles
-│   ├── SageMakerExecutionRole
-│   └── APIGatewaySageMakerRole
-├── AWS ECR Repository
-├── AWS SageMaker
-│   ├── Model
-│   ├── Endpoint Config
-│   └── Endpoint Instance
-└── AWS API Gateway
-    ├── REST API
-    ├── Resources (/fraude)
-    └── Methods (POST)
+┌───────────────────────────────────────────────────────┐
+│  CloudFormation Layer (infra-sagemaker-complete.yaml) │
+│  ⭐ ESTO CREA Y GESTIONA TODO LO SIGUIENTE             │
+└──────────────────┬──────────────────────────────────┘
+                   │
+        ┌──────────┴──────────────┐
+        ▼                          ▼
+┌──────────────────────┐   ┌──────────────────────┐
+│   IAM Security       │   │  AWS SageMaker       │
+├──────────────────────┤   ├──────────────────────┤
+│ SageMaker Role       │   │ Model (Docker)       │
+│ API Gateway Role     │   │ Endpoint Config      │
+│ Policies & Trust     │   │ Endpoint (RUNNING)   │
+└──────────────────────┘   └──────────────────────┘
+        │                          │
+        │                          │
+        └──────────┬───────────────┘
+                   │
+                   ▼
+        ┌──────────────────────┐
+        │  AWS API Gateway     │
+        ├──────────────────────┤
+        │ REST API             │
+        │ /fraude Resource     │
+        │ POST Method          │
+        │ Deployment (prod)    │
+        │                      │
+        │ Publica:            │
+        │ https://{id}...     │
+        │  /prod/fraude       │
+        └──────────┬───────────┘
+                   │
+                   ▼
+          ┌─────────────────┐
+          │   CLIENTE FINAL │
+          │   POST /fraude  │
+          │   Predicción    │
+          └─────────────────┘
+```
 
-Application Layer (Docker + FastAPI)
-├── main.py (FastAPI app)
-├── schemas.py (Pydantic models)
-└── routers/
-    ├── health.py (health checks)
-    └── fraud_prediction.py (fraud scoring)
-
-Data Science Layer
-├── src/pipelines/
-│   ├── 0-cleaning_data/
-│   ├── 1-data_sampling/
-│   ├── 2-feature_engineering/
-│   ├── 3-training/
-│   ├── 4-evaluation/
-│   └── 5-model_registry/
-└── Models (joblib/pickle files)
+**Nota:** TODOS los recursos arriba son creados automáticamente por CloudFormation cuando ejecutas:
+```bash
+aws cloudformation create-stack --template-body file://infra-sagemaker-complete.yaml
 ```
 
 ---
