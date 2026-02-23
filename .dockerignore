@@ -9,7 +9,6 @@
 .ebextensions/
 .elasticbeanstalk/
 cloudformation/
-terraform/
 
 # ============================================================
 # 2. Scripts fallidos

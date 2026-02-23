@@ -32,35 +32,7 @@ curl http://localhost:8000/health
 
 ---
 
-## 2️⃣ TERRAFORM: "Construir infraestructura"
-
-**¿Qué es?** Código que describe "crea un servidor, load balancer, database, etc." en AWS.
-
-**¿Para qué sirve?**
-- Define VPC, ECS Fargate, Load Balancer, API Gateway
-- Repetible: ejecuta 2x el mismo código = 2 ambientes idénticos
-- Controla todo desde código (no clicks en AWS Console)
-
-**Ventajas:** ✅ Repetible, ✅ Git control, ✅ Fácil de escalar
-**Desventajas:** ❌ Nueva sintaxis (HCL), ❌ Debugging complejo, ❌ Costo si falla
-
-**Archivos:**
-- `terraform/main.tf` - Recurso ECS, ALB, API Gateway
-- `terraform/variables.tf` - Variables (CPU, memoria, etc.)
-- `terraform/terraform.tfvars` - Tus valores específicos
-
-**Quick Command:**
-```bash
-cd terraform
-terraform init
-terraform plan      # Ver qué va a crear
-terraform apply     # CREAR (tarda ~10 min)
-terraform output    # Ver URLs resultantes
-```
-
----
-
-## 3️⃣ GITHUB ACTIONS: "Automatizar deployment"
+## 2️⃣ GITHUB ACTIONS: "Automatizar deployment"
 
 **¿Qué es?** CI/CD: cada vez que pusheas código a GitHub, automáticamente:
 1. Corre tests
@@ -93,7 +65,7 @@ Agregar:
 
 ---
 
-## 4️⃣ DOCUMENTACIÓN: "Entender y mantener"
+## 3️⃣ DOCUMENTACIÓN: "Entender y mantener"
 
 **¿Qué es?** Este archivo que estás leyendo + AWS_DEPLOYMENT_GUIDE.md + MANUAL_DEPLOYMENT.md
 
@@ -117,7 +89,7 @@ Agregar:
 ### **DÍA 1: Preparación**
 ```bash
 # 1. Instalar tools (5 min)
-# - AWS CLI, Docker, Terraform
+# - AWS CLI, Docker
 
 # 2. Configurar AWS
 aws configure
@@ -129,26 +101,31 @@ docker run -p 8000:8000 fraud-api:local
 curl http://localhost:8000/docs
 ```
 
-### **DÍA 2: Deploy Infraestructura**
+### **DÍA 2: Deploy Infraestructura con CloudFormation**
 ```bash
-# 1. Editar terraform/terraform.tfvars (2 min)
-# Cambiar valores según necesidades
+# 1. Configurar AWS CLI con tus credenciales
+aws configure
 
-# 2. Crear infraestructura (10 min)
-cd terraform
-terraform init
-terraform plan
-terraform apply
-# Confirma con "yes"
+# 2. Deploy CloudFormation stack (10-15 min)
+cd cloudformation
+aws cloudformation create-stack \
+  --stack-name fraud-detection-stack \
+  --template-body file://infra.yaml \
+  --capabilities CAPABILITY_NAMED_IAM
 
-# 3. Ver URLs resultantes
-terraform output
-# Copia api_gateway_endpoint
+# 3. Ver el estado del deploy
+aws cloudformation describe-stacks \
+  --stack-name fraud-detection-stack
+
+# 4. Obtener URLs resultantes
+aws cloudformation describe-stacks \
+  --stack-name fraud-detection-stack \
+  --query 'Stacks[0].Outputs'
 ```
 
 ### **DÍA 3: Configura CI/CD (opcional pero recomendado)**
 ```bash
-# 1. Push código a GitHub (con Dockerfile, terraform/**, .github/**)
+# 1. Push código a GitHub (con Dockerfile, cloudformation/**, .github/**)
 
 # 2. En GitHub → Settings → Secrets:
 # Agrega AWS credenciales
@@ -165,7 +142,10 @@ git push origin main
 ### **DÍA 4: Migra usuarios de ngrok**
 ```bash
 # 1. Obtén URL de API Gateway
-terraform output -raw api_gateway_endpoint
+aws cloudformation describe-stacks \
+  --stack-name fraud-detection-stack \
+  --query 'Stacks[0].Outputs[?OutputKey==`ApiGatewayUrl`].OutputValue' \
+  --output text
 
 # 2. Reemplaza en clientes:
 # De: https://xxx.ngrok.io/fraud/predict
@@ -235,12 +215,15 @@ AWS Console → CloudWatch → Alarms
 
 ### Escalar
 ```bash
-# Más tráfico? Aumenta contenedores:
-# Edita terraform/terraform.tfvars:
-ecs_max_capacity = 10  # en lugar de 5
+# Más tráfico? Actualiza CloudFormation:
+# Edita cloudformation/infra.yaml:
+DesiredCount: 10  # en lugar de 5
 
 # Aplica:
-terraform apply
+aws cloudformation update-stack \
+  --stack-name fraud-detection-stack \
+  --template-body file://infra.yaml \
+  --capabilities CAPABILITY_NAMED_IAM
 
 # Auto-scaling hará el resto
 ```
@@ -254,7 +237,7 @@ terraform apply
 | "Connection refused" | ¿ECS tasks están corriendo? `aws ecs describe-services ...` |
 | "502 Bad Gateway" | Load Balancer no tiene targets. Espera 2-3 min o verifica health checks |
 | "Docker push fails" | ¿Credenciales ECR? `aws ecr get-login-password \| docker login ...` |
-| "Terraform plan error" | ¿AWS credentials correctas? `aws sts get-caller-identity` |
+| "CloudFormation error" | ¿AWS credentials correctas? `aws sts get-caller-identity` |
 | "Containers exit" | Ver logs: `aws logs tail /ecs/fraud-api` |
 
 ---
@@ -263,18 +246,17 @@ terraform apply
 
 ```
 Proyecto/
-├── Dockerfile               ← Receta Docker
-├── .dockerignore           ← Archivos a NO incluir
-├── terraform/
-│   ├── main.tf             ← Infraestructura
-│   ├── variables.tf        ← Variables
-│   ├── outputs.tf          ← URLs resultantes
-│   └── terraform.tfvars    ← TUS VALORES
+├── Dockerfile                      ← Receta Docker
+├── .dockerignore                   ← Archivos a NO incluir
+├── cloudformation/
+│   ├── infra.yaml                  ← Infraestructura principal
+│   ├── infra-complete-codebuild.yaml  ← CodeBuild config
+│   └── infra-sagemaker-complete.yaml  ← SageMaker config
 ├── .github/workflows/
-│   └── deploy.yml          ← CI/CD automation
-├── AWS_DEPLOYMENT_GUIDE.md ← Guía completa (TU PRINCIPAL REFERENCIA)
-├── MANUAL_DEPLOYMENT.md    ← Pasos sin CI/CD
-└── QUICKSTART.md           ← Este archivo
+│   └── deploy.yml                  ← CI/CD automation
+├── AWS_DEPLOYMENT_GUIDE.md         ← Guía completa (TU PRINCIPAL REFERENCIA)
+├── MANUAL_DEPLOYMENT.md            ← Pasos sin CI/CD
+└── QUICKSTART.md                   ← Este archivo
 ```
 
 ---
@@ -283,12 +265,10 @@ Proyecto/
 
 - [ ] AWS CLI configurado (`aws sts get-caller-identity` funciona)
 - [ ] Docker instalado (`docker --version`)
-- [ ] Terraform instalado (`terraform --version`)
 - [ ] `Dockerfile` creado y testeado localmente
-- [ ] `terraform/` configurado (main.tf, variables.tf, outputs.tf)
-- [ ] `terraform.tfvars` editado con tus valores
-- [ ] `terraform apply` ejecutado exitosamente
-- [ ] `terraform output` muestra URLs
+- [ ] `cloudformation/` templates listos (infra.yaml, etc)
+- [ ] CloudFormation stack creado exitosamente
+- [ ] `aws cloudformation describe-stacks` muestra URLs
 - [ ] API responde en `${API_URL}/health`
 - [ ] GitHub Actions configurado (opcional)
 - [ ] Usuarios migrados de ngrok a nueva URL
@@ -306,11 +286,11 @@ Proyecto/
 
 ## 📞 Preguntas Frecuentes
 
-**P: ¿Cuándo pierdo los datos si Terraform destroy?**
+**P: ¿Cuándo pierdo los datos si elimino el stack de CloudFormation?**
 R: No hay base de datos. Pero sí pierdes logs en CloudWatch.
 
 **P: ¿Puedo parar sin destruir?**
-R: Sí, reduce `desired_count` a 0 sin `destroy`.
+R: Sí, reduce `DesiredCount` a 0 sin eliminar el stack.
 
 **P: ¿Cómo rollback si salió mal?**
 R: `git revert <commit>` + `git push` → redeploya automáticamente.
@@ -319,7 +299,7 @@ R: `git revert <commit>` + `git push` → redeploya automáticamente.
 R: Route53 + Certificate Manager (documentado en AWS_DEPLOYMENT_GUIDE.md).
 
 **P: ¿Y si necesito base de datos?**
-R: Agrega `aws_rds_instance` a Terraform (RDS MySQL/PostgreSQL).
+R: Agrega RDS a CloudFormation (MySQL/PostgreSQL en infra.yaml).
 
 ---
 
